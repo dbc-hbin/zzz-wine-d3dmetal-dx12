@@ -331,24 +331,30 @@
   }
 
   function precomposedD3DMetalChanges(sourceFile) {
-    var functionNode = installFunction(sourceFile);
     var matches = [];
-    visit(functionNode.body, function (node) {
+    visit(sourceFile, function (node) {
       if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken) return;
       var condition = text(node.left, sourceFile);
       var action = text(node.right, sourceFile);
-      if (condition.includes(".attributes.renderBackend") && condition.includes("d3dmetal") && action.includes("yield*")) matches.push(node.left);
+      if (!condition.includes(".attributes.renderBackend") || !condition.includes("d3dmetal") || !action.includes("yield*")) return;
+      var wines = [];
+      visit(node.left, function (candidate) {
+        if (!ts.isPropertyAccessExpression(candidate) || candidate.name.text !== "renderBackend") return;
+        var attributes = candidate.expression;
+        if (ts.isPropertyAccessExpression(attributes) && attributes.name.text === "attributes") wines.push(attributes.expression);
+      });
+      if (wines.length !== 1) throw new Error("could not identify the D3DMetal overlay Wine object");
+      matches.push({ condition: node.left, wine: text(wines[0], sourceFile) });
     });
-    if (!matches.length) return [];
-    if (matches.length > 1) throw new Error("could not unambiguously locate the D3DMetal overlay installation guard");
-    var condition = text(matches[0], sourceFile);
-    if (condition.includes(".attributes.precomposedD3DMetal")) return [];
-    var wine = wineIdentifierFromDownload(findStreamingDownload(functionNode).download);
-    return [{
-      start: matches[0].getStart(sourceFile),
-      end: matches[0].end,
-      replacement: "(" + condition + ")&&" + wine + ".attributes.precomposedD3DMetal!==true"
-    }];
+    return matches.flatMap(function (match) {
+      var condition = text(match.condition, sourceFile);
+      if (condition.includes(".attributes.precomposedD3DMetal")) return [];
+      return [{
+        start: match.condition.getStart(sourceFile),
+        end: match.condition.end,
+        replacement: "(" + condition + ")&&" + match.wine + ".attributes.precomposedD3DMetal!==true"
+      }];
+    });
   }
 
   function findUpdaterCommitMove(sourceFile) {
