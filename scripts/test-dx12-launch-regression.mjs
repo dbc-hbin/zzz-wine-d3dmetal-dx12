@@ -50,7 +50,12 @@ function catalogEntry(ts, node) {
   for (const attribute of attributes.initializer.properties) {
     if (!ts.isPropertyAssignment(attribute)) continue;
     const name = staticPropertyName(ts, attribute.name);
-    const value = stringValue(ts, attribute.initializer);
+    const string = stringValue(ts, attribute.initializer);
+    const value = attribute.initializer.kind === ts.SyntaxKind.TrueKeyword
+      ? true
+      : attribute.initializer.kind === ts.SyntaxKind.FalseKeyword
+        ? false
+        : string;
     if (name && value !== undefined) entry.attributes[name] = value;
   }
   return entry.attributes.renderBackend && entry.attributes.winePath ? entry : undefined;
@@ -157,7 +162,7 @@ function launchHarness(ts, source, distro) {
   });
 
   return {
-    async run(steamPatch) {
+    async run(steamPatch, useD3D12) {
       const runner = await context.__runnerFactory({
         prefix: "/safe/prefix",
         distro,
@@ -166,6 +171,7 @@ function launchHarness(ts, source, distro) {
       const config = {
         resolutionCustom: false,
         steamPatch,
+        useD3D12,
         metalHud: false,
         timeoutFix: false,
         proxyEnabled: false,
@@ -191,9 +197,9 @@ function useD3D12Count(value) {
     : value.split("-use-d3d12").length - 1;
 }
 
-async function assertLaunchArguments(ts, transformedSource, distro, steamPatch, expectedCount) {
+async function assertLaunchArguments(ts, transformedSource, distro, steamPatch, useD3D12, expectedCount) {
   const harness = launchHarness(ts, transformedSource, distro);
-  const result = await harness.run(steamPatch);
+  const result = await harness.run(steamPatch, useD3D12);
   if (steamPatch) {
     const steam = result.executions.find(call => call.flat(Infinity).includes("C:\\windows\\system32\\steam.exe"));
     assert.ok(steam, "Steam launch must reach the stubbed process boundary");
@@ -210,13 +216,15 @@ async function assertLaunchArguments(ts, transformedSource, distro, steamPatch, 
 async function assertCatalogLaunches(ts, source, entries, expectedCount) {
   for (const entry of entries) {
     for (const steamPatch of [false, true]) {
-      await assertLaunchArguments(ts, source, entry, steamPatch, expectedCount(entry));
+      for (const useD3D12 of [false, true]) {
+        await assertLaunchArguments(ts, source, entry, steamPatch, useD3D12, expectedCount(entry, useD3D12));
+      }
     }
   }
 }
 
 function generatedGuard() {
-  return JSON.stringify(protectedRuntimeIds) + ".includes(n.attributes.id)&&n.attributes.renderBackend===\"d3dmetal\"&&u.push(\"-use-d3d12\");";
+  return "r.useD3D12&&n.attributes.supportsD3d12===true&&u.push(\"-use-d3d12\");";
 }
 
 function historicLaunchSource(transformer, source, replacement) {
@@ -241,11 +249,11 @@ async function assertFixedTransformer(transformer, source) {
   assert.ok(target, "transformed catalog must contain the requested target");
   assert.deepEqual(transformedCatalog.filter(entry => entry.id !== targetId), originalCatalog, "unrelated and prior Wine catalog entries must remain byte-equivalent data");
 
-  await assertCatalogLaunches(transformer.ts, first.source, transformedCatalog, entry => protectedRuntimeIds.includes(entry.id) ? 1 : 0);
+  await assertCatalogLaunches(transformer.ts, first.source, transformedCatalog, (entry, enabled) => enabled && entry.attributes.supportsD3d12 === true ? 1 : 0);
   await assertCatalogLaunches(transformer.ts, first.source, [{
     id: experimentalId,
-    attributes: { id: experimentalId, renderBackend: "d3dmetal", winePath: "wine" },
-  }], () => 1);
+    attributes: { id: experimentalId, renderBackend: "d3dmetal", winePath: "wine", supportsD3d12: true },
+  }], (_entry, enabled) => enabled ? 1 : 0);
   await assertCatalogLaunches(transformer.ts, first.source, [{
     id: experimentalId,
     attributes: { id: experimentalId, renderBackend: "dxmt", winePath: "wine" },
@@ -266,7 +274,7 @@ async function assertLegacyUpgrade(transformer, source, replacement, priorCount,
   assert.equal(upgraded.changed, true, "current transformer must upgrade the prior launch guard");
   assert.equal(upgraded.source.split(replacement).length - 1, expectedReplacementOccurrences, "current transformer must replace the prior launch guard instead of adding another one");
   const upgradedCatalog = catalogEntries(transformer.ts, upgraded.source);
-  await assertCatalogLaunches(transformer.ts, upgraded.source, upgradedCatalog, entry => entry.id === targetId ? 1 : 0);
+  await assertCatalogLaunches(transformer.ts, upgraded.source, upgradedCatalog, (entry, enabled) => enabled && entry.attributes.supportsD3d12 === true ? 1 : 0);
 
   const repeatedUpgrade = transformSource(transformer, upgraded.source);
   assert.equal(repeatedUpgrade.changed, false, "upgrading a historical frontend must become idempotent");
@@ -286,5 +294,5 @@ test("DX12 launch registration upgrades the historical absent-runner-id guard", 
 
 test("DX12 launch registration upgrades the historical backend-only guard", async () => {
   const replacement = "n.attributes.renderBackend===\"d3dmetal\"&&u.push(\"-use-d3d12\");";
-  await assertLegacyUpgrade(transformer, upstreamSource, replacement, entry => entry.attributes.renderBackend === "d3dmetal" ? 1 : 0, 1);
+  await assertLegacyUpgrade(transformer, upstreamSource, replacement, entry => entry.attributes.renderBackend === "d3dmetal" ? 1 : 0, 0);
 });

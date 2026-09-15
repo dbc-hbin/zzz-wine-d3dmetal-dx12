@@ -260,7 +260,7 @@
     return prior;
   }
 
-  function launchChanges(sourceFile, protectedRuntimeIds) {
+  function launchChanges(sourceFile) {
     var matches = functionNodes(sourceFile).filter(function (candidate) {
       if (!candidate.body) return false;
       var bodyText = text(candidate.body, sourceFile);
@@ -293,8 +293,18 @@
       if (ts.isCallExpression(expression) && expression.arguments.length === 1 && stringLiteralValue(expression.arguments[0]) === "-use-d3d12" && propertyAccessName(expression.expression) === "push" && isIdentifierNamed(expression.expression.expression, argumentsName)) d3d12Statements.push(node);
     });
 
-    var protectedIds = JSON.stringify(protectedRuntimeIds);
-    var d3d12Statement = protectedIds + ".includes(" + wine + ".attributes.id)&&" + wine + ".attributes.renderBackend===\"d3dmetal\"&&" + argumentsName + ".push(\"-use-d3d12\");";
+    var configBindings = [];
+    functionNode.parameters.forEach(function (parameter) {
+      if (!ts.isObjectBindingPattern(parameter.name)) return;
+      parameter.name.elements.forEach(function (element) {
+        var propertyName = element.propertyName ? staticPropertyName(element.propertyName) : staticPropertyName(element.name);
+        if (propertyName === "config" && ts.isIdentifier(element.name)) configBindings.push(element.name.text);
+      });
+    });
+    if (configBindings.length !== 1) throw new Error("could not unambiguously locate the game launch config");
+
+    var config = configBindings[0];
+    var d3d12Statement = config + ".useD3D12&&" + wine + ".attributes.supportsD3d12===true&&" + argumentsName + ".push(\"-use-d3d12\");";
     var changes = d3d12Statements.length ? [{
       start: d3d12Statements[0].getStart(sourceFile),
       end: d3d12Statements[0].end,
@@ -513,7 +523,7 @@
         id: targetId,
         displayName: displayName,
         remoteUrl: archiveURL,
-        attributes: { id: targetId, renderBackend: "d3dmetal", winePath: "wine" }
+        attributes: { id: targetId, renderBackend: "d3dmetal", winePath: "wine", supportsD3d12: true }
       });
       var catalog = findTargetDistribution(sourceFile, targetId);
       var changes = [];
@@ -526,7 +536,7 @@
       }
       changes = changes.concat(localInstallerChanges(sourceFile, targetId, protectedRuntimeIds));
       changes = changes.concat(precomposedD3DMetalChanges(sourceFile));
-      changes = changes.concat(launchChanges(sourceFile, protectedRuntimeIds));
+      changes = changes.concat(launchChanges(sourceFile));
       changes = changes.concat(updaterChanges(sourceFile, options));
       var output = applyChanges(source, changes);
       var outputFile = parse(output);

@@ -21,6 +21,8 @@ import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ANCHOR_RUNTIME_ID = "11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-rollback-gptk4b2-arm64server";
+const EXPERIMENTAL_RUNTIME_ID = "wine-11.17-gptk4.0b2-metalfx-experimental";
+const D3D12_RUNTIME_IDS = new Set([ANCHOR_RUNTIME_ID, EXPERIMENTAL_RUNTIME_ID]);
 const WINE_VERSION = "wine-11.17";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
@@ -194,9 +196,11 @@ function literalWineDistribution(node) {
   const winePath = property(attributes.initializer, "winePath");
   const precomposedD3DMetal = property(attributes.initializer, "precomposedD3DMetal");
   const d3dMetalGraphicsCache = property(attributes.initializer, "d3dMetalGraphicsCache");
+  const supportsD3d12 = property(attributes.initializer, "supportsD3d12");
   if (!renderBackend || !winePath || !precomposedD3DMetal || !d3dMetalGraphicsCache) return undefined;
   if (precomposedD3DMetal.initializer.kind !== ts.SyntaxKind.TrueKeyword) return undefined;
   if (![ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword].includes(d3dMetalGraphicsCache.initializer.kind)) return undefined;
+  if (supportsD3d12 && supportsD3d12.initializer.kind !== ts.SyntaxKind.TrueKeyword) return undefined;
   const strings = [
     id.initializer,
     displayName.initializer,
@@ -221,6 +225,7 @@ function literalWineDistribution(node) {
       winePath: strings[7],
       precomposedD3DMetal: true,
       d3dMetalGraphicsCache: d3dMetalGraphicsCache.initializer.kind === ts.SyntaxKind.TrueKeyword,
+      ...(supportsD3d12 ? { supportsD3d12: true } : {}),
     },
   };
 }
@@ -387,6 +392,7 @@ async function main(argv) {
       winePath: "wine",
       precomposedD3DMetal: true,
       d3dMetalGraphicsCache: runtimeMetadata.d3dMetalGraphicsCache,
+      ...(D3D12_RUNTIME_IDS.has(id) ? { supportsD3d12: true } : {}),
     },
   };
 
