@@ -330,6 +330,27 @@
     return changes;
   }
 
+  function precomposedD3DMetalChanges(sourceFile) {
+    var functionNode = installFunction(sourceFile);
+    var matches = [];
+    visit(functionNode.body, function (node) {
+      if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken) return;
+      var condition = text(node.left, sourceFile);
+      var action = text(node.right, sourceFile);
+      if (condition.includes(".attributes.renderBackend") && condition.includes("d3dmetal") && action.includes("yield*")) matches.push(node.left);
+    });
+    if (!matches.length) return [];
+    if (matches.length > 1) throw new Error("could not unambiguously locate the D3DMetal overlay installation guard");
+    var condition = text(matches[0], sourceFile);
+    if (condition.includes(".attributes.precomposedD3DMetal")) return [];
+    var wine = wineIdentifierFromDownload(findStreamingDownload(functionNode).download);
+    return [{
+      start: matches[0].getStart(sourceFile),
+      end: matches[0].end,
+      replacement: "(" + condition + ")&&" + wine + ".attributes.precomposedD3DMetal!==true"
+    }];
+  }
+
   function findUpdaterCommitMove(sourceFile) {
     var matches = [];
     visit(sourceFile, function (node) {
@@ -498,6 +519,7 @@
         changes.push({ start: array.end - 1, end: array.end - 1, replacement: "," + record });
       }
       changes = changes.concat(localInstallerChanges(sourceFile, targetId, protectedRuntimeIds));
+      changes = changes.concat(precomposedD3DMetalChanges(sourceFile));
       changes = changes.concat(launchChanges(sourceFile, protectedRuntimeIds));
       changes = changes.concat(updaterChanges(sourceFile, options));
       var output = applyChanges(source, changes);
