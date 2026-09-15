@@ -409,7 +409,6 @@ async function main(argv) {
       );
     }
     const current = inspected.matches[0];
-    const currentArchiveSha256 = property(current.node, "archiveSha256");
     const currentAttributes = property(current.node, "attributes");
     const currentRenderBackend = property(
       currentAttributes.initializer,
@@ -417,7 +416,6 @@ async function main(argv) {
     );
     const currentWinePath = property(currentAttributes.initializer, "winePath");
     if (
-      !currentArchiveSha256 ||
       stringLiteralValue(currentRenderBackend?.initializer) !== "d3dmetal" ||
       stringLiteralValue(currentWinePath?.initializer) !== "wine"
     ) {

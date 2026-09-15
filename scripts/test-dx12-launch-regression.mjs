@@ -236,6 +236,8 @@ async function assertFixedTransformer(transformer, source) {
 
   const first = transformSource(transformer, source);
   assert.equal(first.changed, true, "first registration must modify the pristine upstream frontend");
+  const localArchiveGuard = JSON.stringify(protectedRuntimeIds) + ".includes(n.id)&&n.remoteUrl.startsWith(\"file:\")";
+  assert.ok(first.source.includes(localArchiveGuard), "local archive installation must use the exact protected runtime allowlist");
   const transformedCatalog = catalogEntries(transformer.ts, first.source);
   const target = transformedCatalog.find(entry => entry.id === targetId);
   assert.ok(target, "transformed catalog must contain the requested target");
@@ -254,6 +256,14 @@ async function assertFixedTransformer(transformer, source) {
   const second = transformSource(transformer, first.source);
   assert.equal(second.changed, false, "re-registering an already transformed frontend must be idempotent");
   assert.equal(second.source, first.source, "idempotent registration must retain the transformed frontend byte-for-byte");
+
+  const historicalLocalGuard = "n.id===\"" + targetId + "\"&&n.remoteUrl.startsWith(\"file:\")";
+  const historicalLocal = first.source.replace(localArchiveGuard, historicalLocalGuard);
+  assert.notEqual(historicalLocal, first.source, "historical local archive guard replacement must apply");
+  const migratedLocal = transformSource(transformer, historicalLocal);
+  assert.equal(migratedLocal.source.includes(historicalLocalGuard), false, "historical local archive guard must be removed");
+  assert.ok(migratedLocal.source.includes(localArchiveGuard), "historical local archive guard must migrate to the exact allowlist");
+  assert.equal(transformSource(transformer, migratedLocal.source).changed, false, "migrated local archive guard must be idempotent");
 }
 
 async function assertLegacyUpgrade(transformer, source, replacement, priorCount, expectedReplacementOccurrences) {

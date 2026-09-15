@@ -135,10 +135,22 @@
     return matches[0];
   }
 
-  function localInstallerChanges(sourceFile, targetId) {
+  function localInstallerChanges(sourceFile, targetId, protectedRuntimeIds) {
     var functionNode = installFunction(sourceFile);
     var bodyText = text(functionNode.body, sourceFile);
-    if (bodyText.includes("__yaaglD3MetalLocalArchive")) return [];
+    if (bodyText.includes("__yaaglD3MetalLocalArchive")) {
+      var markers = [];
+      visit(functionNode.body, function (node) {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === "__yaaglD3MetalLocalArchive" && node.initializer) markers.push(node.initializer);
+      });
+      if (markers.length !== 1) throw new Error("could not unambiguously locate prior local Wine archive marker");
+      var wine = wineIdentifierFromDownload(findStreamingDownload(functionNode).download);
+      var protectedIds = JSON.stringify(protectedRuntimeIds);
+      var replacement = protectedIds + ".includes(" + wine + ".id)&&" + wine + ".remoteUrl.startsWith(\"file:\")";
+      var markerText = text(markers[0], sourceFile);
+      if (markerText.includes(protectedIds + ".includes(" + wine + ".id)") && markerText.includes(wine + ".remoteUrl.startsWith(\"file:\")")) return [];
+      return [{ start: markers[0].getStart(sourceFile), end: markers[0].end, replacement: replacement }];
+    }
 
     var streaming = findStreamingDownload(functionNode);
     var wine = wineIdentifierFromDownload(streaming.download);
@@ -173,8 +185,8 @@
     if (!compressed || !archive || !ts.isIdentifier(compressed.name) || !ts.isIdentifier(archive.name) || !compressed.initializer || !archive.initializer) throw new Error("Wine archive declarations have an unsupported shape");
 
     var marker = "__yaaglD3MetalLocalArchive";
-    var target = JSON.stringify(targetId);
-    var declarationReplacement = "let " + compressed.name.text + "=" + text(compressed.initializer, sourceFile) + "," + marker + "=" + wine + ".id===" + target + "&&" + wine + ".remoteUrl.startsWith(\"file:\")," + archive.name.text + "=" + marker + "?decodeURIComponent(new URL(" + wine + ".remoteUrl).pathname):" + text(archive.initializer, sourceFile);
+    var protectedIds = JSON.stringify(protectedRuntimeIds);
+    var declarationReplacement = "let " + compressed.name.text + "=" + text(compressed.initializer, sourceFile) + "," + marker + "=" + protectedIds + ".includes(" + wine + ".id)&&" + wine + ".remoteUrl.startsWith(\"file:\")," + archive.name.text + "=" + marker + "?decodeURIComponent(new URL(" + wine + ".remoteUrl).pathname):" + text(archive.initializer, sourceFile);
 
     var deletes = [];
     visit(functionNode.body, function (node) {
@@ -485,7 +497,7 @@
         var array = catalogArray(catalog.distributions);
         changes.push({ start: array.end - 1, end: array.end - 1, replacement: "," + record });
       }
-      changes = changes.concat(localInstallerChanges(sourceFile, targetId));
+      changes = changes.concat(localInstallerChanges(sourceFile, targetId, protectedRuntimeIds));
       changes = changes.concat(launchChanges(sourceFile, protectedRuntimeIds));
       changes = changes.concat(updaterChanges(sourceFile, options));
       var output = applyChanges(source, changes);
