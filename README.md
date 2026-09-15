@@ -98,6 +98,12 @@ This build integrates several targeted patches into upstream Wine 11.17 to ensur
 - Dedupes shader compilation and retains compiled PSOs across the device lifetime.
 - Cache warmup ensures smooth combat and scene transitions from the very first run.
 
+#### Experimental NGX exposure correction and diagnostics
+
+`YAAGL_METALFX_EXPOSURE_SCALE_FIX=1` opts in to a narrowly scoped experimental correction. For manual-exposure HDR evaluations with no auto-exposure and no caller-provided exposure texture, a finite positive `DLSS.Exposure.Scale` other than `1` is represented by an internal 1×1 `R16Float` exposure texture. Existing exposure textures and `DLSS.Pre.Exposure` are left untouched; missing scale, `0`, and `1` are skipped. The correction is off by default. It does not claim NVIDIA-equivalent output and is not a jitter fix.
+
+Set `YAAGL_METALFX_DIAGNOSTICS=1` and `YAAGL_METALFX_LOG` to an absolute path to emit bounded JSONL diagnostics. The log is created with mode `0600` and stops after 8,192 events. Events trace public API entry through the internal evaluation, recorded command, and replay/encode stages, with post-encode MetalFX properties where available. Correlation identifiers are diagnostic record/command identities, not engine frame IDs or proof of GPU completion. A legacy `Unsupported feature` warning from the original implementation may remain even when evaluation and GPU output succeed.
+
 ### 5. Cursor Ownership & RawInput Separation (`0004-macdrv-reset-rawinput-baseline.patch`)
 - Preserves native cursor display and window routing while making ownership synchronization independent of cursor position.
 - Sends warp-corrected mouse deltas separately from pointer coordinates, preserving fractional motion and event coalescing without dropping the first real movement.
@@ -167,6 +173,25 @@ export WINE_RUNTIME_ID=11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-r
 # 3. Build GUI Installer
 ./installer/build.sh
 ```
+
+### Build and run the NGX smoke fixture
+
+The fixture requires external headers from the official NVIDIA NGX SDK (the include directory containing `nvsdk_ngx.h`) and LLVM-MinGW. The SDK headers are not vendored. The small MSVC-target object is required because the NGX parameter interface uses the Microsoft C++ ABI; the remaining fixture uses the MinGW target for the Windows libraries.
+
+```bash
+C=/path/to/llvm-mingw/bin/clang++
+NGX_SDK_INCLUDE=/path/to/NVIDIA-NGX-SDK/include
+
+"$C" --target=x86_64-pc-windows-msvc -std=c++20 -fno-exceptions -fno-rtti \
+  -Wall -Wextra -Werror -I"$NGX_SDK_INCLUDE" \
+  -c d3dmetal-pso-cache/ngx-smoke-msvc.cpp -o build/ngx-smoke-msvc.obj
+"$C" --target=x86_64-w64-mingw32 -std=c++20 -Wall -Wextra -Werror \
+  -static -Wl,--stack,8388608 -I"$NGX_SDK_INCLUDE" \
+  d3dmetal-pso-cache/ngx-smoke.cpp build/ngx-smoke-msvc.obj \
+  -ld3d12 -ldxgi -luuid -o build/ngx-smoke.exe
+```
+
+Run this executable only with a disposable, isolated Wine prefix and a copied test runtime—never a game or user prefix. Success is exit status 0 plus `NGX_SMOKE_PASS`. The packaged Wine wrapper forces `D3DM_MTL4=1`; when deliberately exercising the legacy path, bypass it with that isolated runtime's `wine.real` and the required legacy environment instead of setting `D3DM_MTL4=0` on the wrapper.
 
 The installer build requires the new `build/wine-tuned/package/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` archive (or an explicit `RUNTIME_ARCHIVE_SOURCE`). It does not silently bundle an older installed runtime.
 

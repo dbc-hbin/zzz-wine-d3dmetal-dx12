@@ -23,6 +23,7 @@
 #include "function-hooks.hpp"
 #include "key.hpp"
 #include "layout.hpp"
+#include "ngx-hooks.hpp"
 #include "persistent-cache.hpp"
 #include "rt-key.hpp"
 #include "stage-cache.hpp"
@@ -435,6 +436,14 @@ __attribute__((constructor)) void initialize() noexcept {
         const StageHookEntryPoints stage = initializeStageHooks(base, stageOriginals);
         if (stage.compileComputeStages == nullptr || stage.compileGraphicsStages == nullptr ||
             stage.createComputeStageKey == nullptr || stage.createGraphicsStageKey == nullptr) return;
+        std::array<std::uintptr_t, ngx::kHookCount> ngxOriginals{};
+        for (std::size_t index = 0; index < ngx::kHookCount; ++index) {
+            ngxOriginals[index] = originalFunctions[17 + index];
+        }
+        const auto ngxHooks = ngx::initializeHooks(base, ngxOriginals);
+        for (const auto hook : ngxHooks) {
+            if (hook == 0) return;
+        }
         functionImageBase = reinterpret_cast<std::uintptr_t>(base);
         dispatchTable = {
             reinterpret_cast<std::uintptr_t>(&createMetal4Render),
@@ -454,6 +463,14 @@ __attribute__((constructor)) void initialize() noexcept {
             reinterpret_cast<std::uintptr_t>(stage.createGraphicsStageKey),
             reinterpret_cast<std::uintptr_t>(&extractFunctions),
             reinterpret_cast<std::uintptr_t>(&loadGraphicsFunctions),
+            ngxHooks[0],
+            ngxHooks[1],
+            ngxHooks[2],
+            ngxHooks[3],
+            ngxHooks[4],
+            ngxHooks[5],
+            ngxHooks[6],
+            ngxHooks[7],
         };
         auto& slot = *reinterpret_cast<std::uintptr_t*>(const_cast<std::uint8_t*>(base) + layout::kDataSlot);
         std::atomic_ref<std::uintptr_t>(slot).store(

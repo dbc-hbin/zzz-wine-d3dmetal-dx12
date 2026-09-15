@@ -15,7 +15,7 @@ const layoutText = await readFile(
 );
 const layoutSha256 = createHash("sha256").update(layoutText).digest("hex");
 const expectedLayoutSha256 =
-  "d96b8fcd1838b5f4ddede1bb607b14a4840cca3802b07ad5dd88fb22b09effeb";
+  "2338219121faa6b7b9c9d005d7ed3655f330fcca560187c05b67580de10cd9c7";
 if (layoutSha256 !== expectedLayoutSha256) {
   throw new Error(
     `layout corruption: expected SHA-256 ${expectedLayoutSha256}, got ${layoutSha256}`
@@ -27,9 +27,9 @@ if (layout.formatVersion !== 4) {
 }
 
 export const D3DMETAL_PSO_CACHE_PATCHED_SHA256 =
-  "08917512b8faee8575dd47d09a96da900580648e803ad1e3b37a2b93fee52eb6";
+  "9edbcd58b8b5d0456b1446d07eb9da5c89144a90f02471b9136e6b014440690d";
 export const D3DMETAL_PSO_CACHE_PATCHED_PAYLOAD_SHA256 =
-  "76bb5260a385c5389760f90849b890ec6dbc99cca4c43506ac13ed844ae0856f";
+  "546c3019bb1c98e6504665616e63e6be61133d8d614bfe6ea35c9dbb5cae98aa";
 
 const LC_SEGMENT_64 = 0x19;
 const LC_UUID = 0x1b;
@@ -361,7 +361,11 @@ for (const hook of layout.hooks) {
       hook.gateOffset < layout.constructorVerification.markerOffset ||
       hook.trampolineOffset < layout.constructorVerification.markerOffset ||
       hook.gateOffset + gate.length > layout.textCave.endOffset ||
-      hook.trampolineOffset + trampoline.length > layout.textCave.endOffset) {
+      hook.trampolineOffset + trampoline.length > layout.textCave.endOffset ||
+      gate[8] !== 0x74 ||
+      hook.gateOffset + 8 + gate.readInt32LE(3) !== layout.dispatch.dataSlotVMAddr ||
+      hook.gateOffset + 17 + gate.readInt32LE(13) !== layout.dispatch.dataSlotVMAddr ||
+      hook.gateOffset + 10 + gate.readInt8(9) !== hook.trampolineOffset) {
     throw new Error(`layout corruption: invalid relocated prologue for ${hook.id}`);
   }
 }

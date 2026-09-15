@@ -98,6 +98,12 @@ v1.0.3은 설치 프로그램만 수정합니다. 동봉된 macOS 26 Wine 아카
 - 중복 셰이더 생성을 막고 디바이스 수명 동안 Metal 파이프라인 상태 객체(PSO)를 재사용합니다.
 - 사전 캐시 웜업(Warmup) 구조로 쾌적한 전투 환경을 제공합니다.
 
+#### 실험적 NGX 노출 보정 및 진단
+
+`YAAGL_METALFX_EXPOSURE_SCALE_FIX=1`로 범위가 제한된 실험적 보정을 선택할 수 있습니다. 자동 노출과 호출자가 제공한 노출 텍스처가 모두 없는 수동 노출 HDR 평가에서, 유한한 양수 `DLSS.Exposure.Scale` 값이 `1`이 아니면 내부 1×1 `R16Float` 노출 텍스처로 표현합니다. 기존 노출 텍스처와 `DLSS.Pre.Exposure`는 변경하지 않으며, scale이 없거나 `0` 또는 `1`이면 건너뜁니다. 기본값은 꺼짐입니다. NVIDIA와 동등한 출력이나 jitter 수정을 주장하지 않습니다.
+
+`YAAGL_METALFX_DIAGNOSTICS=1`을 설정하고 `YAAGL_METALFX_LOG`에 절대 경로를 지정하면 제한된 JSONL 진단 로그를 기록합니다. 로그 파일 모드는 `0600`이며 8,192개 이벤트 이후 기록을 중단합니다. 공개 API 진입부터 내부 평가, 기록된 명령, replay/encode 단계와 가능한 경우 encode 이후의 실제 MetalFX 속성까지 추적합니다. 상관관계 식별자는 진단용 record/command 식별자이며 엔진 프레임 ID나 GPU 완료 증명이 아닙니다. 평가와 GPU 출력이 성공하더라도 기존 legacy 구현의 `Unsupported feature` 경고는 남을 수 있습니다.
+
 ### 5. 커서 소유권과 RawInput 분리 (`0004-macdrv-reset-rawinput-baseline.patch`)
 - 네이티브 커서 표시와 창 판정은 유지하고, 커서 소유권 동기화가 포인터 좌표를 변경하지 않도록 분리했습니다.
 - warp 변위를 보정한 마우스 이동량을 포인터 좌표와 별도로 전달합니다. 첫 실제 이동을 버리지 않고 소수 이동량과 이벤트 병합을 보존합니다.
@@ -167,6 +173,25 @@ export WINE_RUNTIME_ID=11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-r
 # 3. GUI 설치 관리자 컴파일
 ./installer/build.sh
 ```
+
+### NGX smoke fixture 빌드 및 실행
+
+fixture에는 공식 NVIDIA NGX SDK의 외부 헤더(`nvsdk_ngx.h`가 있는 include 디렉터리)와 LLVM-MinGW가 필요합니다. SDK 헤더는 저장소에 포함하지 않습니다. NGX parameter 인터페이스가 Microsoft C++ ABI를 사용하므로 작은 wrapper object는 MSVC 타깃으로 빌드해야 하며, 나머지 fixture는 Windows 라이브러리 연결을 위해 MinGW 타깃을 사용합니다.
+
+```bash
+C=/path/to/llvm-mingw/bin/clang++
+NGX_SDK_INCLUDE=/path/to/NVIDIA-NGX-SDK/include
+
+"$C" --target=x86_64-pc-windows-msvc -std=c++20 -fno-exceptions -fno-rtti \
+  -Wall -Wextra -Werror -I"$NGX_SDK_INCLUDE" \
+  -c d3dmetal-pso-cache/ngx-smoke-msvc.cpp -o build/ngx-smoke-msvc.obj
+"$C" --target=x86_64-w64-mingw32 -std=c++20 -Wall -Wextra -Werror \
+  -static -Wl,--stack,8388608 -I"$NGX_SDK_INCLUDE" \
+  d3dmetal-pso-cache/ngx-smoke.cpp build/ngx-smoke-msvc.obj \
+  -ld3d12 -ldxgi -luuid -o build/ngx-smoke.exe
+```
+
+이 실행 파일은 복사한 테스트 런타임과 폐기 가능한 격리 Wine prefix에서만 실행하고 게임 또는 사용자 prefix에는 실행하지 마세요. 종료 상태 0과 `NGX_SMOKE_PASS`가 성공 조건입니다. 패키지 Wine wrapper는 `D3DM_MTL4=1`을 강제합니다. legacy 경로를 의도적으로 검사할 때는 wrapper에 `D3DM_MTL4=0`을 설정하지 말고, 격리 런타임의 `wine.real`과 필요한 legacy 환경을 사용해 wrapper를 우회하세요.
 
 설치 앱 빌드에는 새 `build/wine-tuned/package/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` 아카이브 또는 명시적인 `RUNTIME_ARCHIVE_SOURCE`가 필요합니다. 기존에 설치된 오래된 런타임을 대신 포함하지 않습니다.
 

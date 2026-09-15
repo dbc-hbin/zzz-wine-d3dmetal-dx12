@@ -112,6 +112,56 @@
       "id": "ComputeExtractCall",
       "offset": 1110248,
       "expectedHex": "e8c5ef0500"
+    },
+    {
+      "id": "NgxGetResourceMsAbi",
+      "offset": 693158,
+      "expectedHex": "415741564154565755534881ecc0000000"
+    },
+    {
+      "id": "NgxGetIntMsAbi",
+      "offset": 693870,
+      "expectedHex": "415741564154565755534881ecc0000000"
+    },
+    {
+      "id": "NgxGetUintMsAbi",
+      "offset": 694226,
+      "expectedHex": "415741564154565755534881ecc0000000"
+    },
+    {
+      "id": "NgxGetFloatMsAbi",
+      "offset": 694940,
+      "expectedHex": "415741564154565755534881ecc0000000"
+    },
+    {
+      "id": "TemporalScaleReplayCommandLayout",
+      "offset": 119122,
+      "expectedHex": "488b4dc848894808"
+    },
+    {
+      "id": "TemporalScaleDescriptorCopy",
+      "offset": 119147,
+      "expectedHex": "410f1006410f104e10410f105620410f105e300f1140200f1148300f1150400f115850410f1046400f114060410f1046500f114070410f1046600f118080000000498b4e7048898890000000"
+    },
+    {
+      "id": "TemporalScaleForcedResetStore",
+      "offset": 119223,
+      "expectedHex": "8a4dd780e101888898000000"
+    },
+    {
+      "id": "ReplayTemporalScaleWrapperReceiver",
+      "offset": 222826,
+      "expectedHex": "488b7e08"
+    },
+    {
+      "id": "EncodeTemporalScaleScalerReceiver",
+      "offset": 1244054,
+      "expectedHex": "498b7f08"
+    },
+    {
+      "id": "NgxD3D12EvaluateFeatureQiRouting",
+      "offset": 1650742,
+      "expectedHex": "48833d820f3900007438488b79f8488b07488b3552bb3100ff501848894424204885c00f84030100004989c4488b00488b40e84c89e74801c7498b0404ff5020eb334c8d44242849c70000000000488b01488b1512bb3100ff104c8b64242885c00f88a40000004c896424204d85e40f84b7000000488b35cebc3100488d1507b73200b968000000"
     }
   ],
   "hooks": [
@@ -315,9 +365,105 @@
       "continuationOffset": 1115979,
       "originalHex": "5541574156",
       "entryPatchHex": "e995d13900",
-      "gateHex": "48833db8a8070000740e4c8b1dafa8070041ffa380000000",
+      "gateHex": "48833db8a807000074264c8b1dafa8070041ffa380000000",
       "trampolineHex": "5541574156e9312ec6ff",
       "dispatchFieldOffset": 128
+    },
+    {
+      "id": "NgxEvaluateMPL",
+      "entryOffset": 678500,
+      "gateOffset": 4905264,
+      "trampolineOffset": 4905296,
+      "continuationOffset": 678505,
+      "originalHex": "5541574156",
+      "entryPatchHex": "e9c77e4000",
+      "gateHex": "48833d68a807000074164c8b1d5fa8070041ffa388000000",
+      "trampolineHex": "5541574156e90f81bfff",
+      "dispatchFieldOffset": 136
+    },
+    {
+      "id": "NgxEvaluateMTL",
+      "entryOffset": 1051456,
+      "gateOffset": 4905328,
+      "trampolineOffset": 4905360,
+      "continuationOffset": 1051461,
+      "originalHex": "5541574156",
+      "entryPatchHex": "e92bce3a00",
+      "gateHex": "48833d28a807000074164c8b1d1fa8070041ffa390000000",
+      "trampolineHex": "5541574156e9ab31c5ff",
+      "dispatchFieldOffset": 144
+    },
+    {
+      "id": "TemporalScaleMPL",
+      "entryOffset": 118676,
+      "gateOffset": 4905392,
+      "trampolineOffset": 4905424,
+      "continuationOffset": 118682,
+      "originalHex": "554889e54157",
+      "entryPatchHex": "e9170a490090",
+      "gateHex": "48833de8a707000074164c8b1ddfa7070041ffa398000000",
+      "trampolineHex": "554889e54157e9bff5b6ff",
+      "dispatchFieldOffset": 152
+    },
+    {
+      "id": "ReplayTemporalScaleMPL",
+      "entryOffset": 222806,
+      "gateOffset": 4905456,
+      "trampolineOffset": 4905488,
+      "continuationOffset": 222812,
+      "originalHex": "554889e54157",
+      "entryPatchHex": "e99573470090",
+      "gateHex": "48833da8a707000074164c8b1d9fa7070041ffa3a0000000",
+      "trampolineHex": "554889e54157e9418cb8ff",
+      "dispatchFieldOffset": 160
+    },
+    {
+      "id": "EncodeTemporalScaleMTL",
+      "entryOffset": 1243989,
+      "gateOffset": 4905520,
+      "trampolineOffset": 4905552,
+      "continuationOffset": 1243994,
+      "originalHex": "5541574156",
+      "entryPatchHex": "e9d6de3700",
+      "gateHex": "48833d68a707000074164c8b1d5fa7070041ffa3a8000000",
+      "trampolineHex": "5541574156e90021c8ff",
+      "dispatchFieldOffset": 168
+    },
+    {
+      "id": "LegacyRecordComplete",
+      "entryOffset": 1055048,
+      "gateOffset": 4905584,
+      "trampolineOffset": 4905616,
+      "continuationOffset": 1055053,
+      "originalHex": "bd01000000",
+      "entryPatchHex": "e923c13a00",
+      "gateHex": "48833d28a707000074164c8b1d1fa7070041ffa3b0000000",
+      "trampolineHex": "bd01000000e9b33ec5ff",
+      "dispatchFieldOffset": 176
+    },
+    {
+      "id": "MplRecordComplete",
+      "entryOffset": 119235,
+      "gateOffset": 4905648,
+      "trampolineOffset": 4905680,
+      "continuationOffset": 119243,
+      "originalHex": "4889dfbe01000000",
+      "entryPatchHex": "e9e8084900909090",
+      "gateHex": "48833de8a607000074164c8b1ddfa6070041ffa3b8000000",
+      "trampolineHex": "4889dfbe01000000e9eef6b6ff",
+      "dispatchFieldOffset": 184
+    },
+    {
+      "id": "NgxD3D12EvaluateFeature",
+      "entryOffset": 1650610,
+      "gateOffset": 4905728,
+      "trampolineOffset": 4905760,
+      "continuationOffset": 1650616,
+      "originalHex": "415741564154",
+      "entryPatchHex": "e949ab310090",
+      "gateHex": "48833d98a607000074164c8b1d8fa6070041ffa3c0000000",
+      "trampolineHex": "415741564154e98d54ceff",
+      "dispatchFieldOffset": 192
     }
   ]
 }
