@@ -20,7 +20,7 @@ import { promisify } from "node:util";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const CURRENT_P3_ID = "11.0-d3dmetal-gptk4.0b2-rtx5060-i1";
+const ANCHOR_RUNTIME_ID = "11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-rollback-gptk4b2-arm64server";
 const WINE_VERSION = "wine-11.17";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
@@ -402,10 +402,10 @@ async function main(argv) {
     await mkdir(extractedRoot);
     asar.extractAll(sourcePath, extractedRoot);
     const beforeHashes = await memberHashes(extractedRoot);
-    const inspected = await inspectBundle(extractedRoot, CURRENT_P3_ID);
+    const inspected = await inspectBundle(extractedRoot, ANCHOR_RUNTIME_ID);
     if (inspected.matches.length !== 1) {
       fail(
-        `expected exactly one current P3 WineDistribution ${CURRENT_P3_ID}, found ${inspected.matches.length}`
+        `expected exactly one anchor WineDistribution ${ANCHOR_RUNTIME_ID}, found ${inspected.matches.length}`
       );
     }
     const current = inspected.matches[0];
@@ -419,12 +419,12 @@ async function main(argv) {
       stringLiteralValue(currentRenderBackend?.initializer) !== "d3dmetal" ||
       stringLiteralValue(currentWinePath?.initializer) !== "wine"
     ) {
-      fail("current P3 WineDistribution has an unexpected structure");
+      fail("anchor WineDistribution has an unexpected structure");
     }
     const currentArrayElement = distributionArrayElement(current);
     if (!currentArrayElement) {
       fail(
-        "current P3 WineDistribution is not a direct array element or an unambiguous top-level const object binding"
+        "anchor WineDistribution is not a direct array element or an unambiguous top-level const object binding"
       );
     }
     const existing = inspected.distributions.filter(
@@ -500,15 +500,15 @@ async function main(argv) {
       fail("candidate readback changed the WineDistribution count unexpectedly");
     }
     const preservedP3 = readback.distributions.filter(
-      distribution => distribution.id === CURRENT_P3_ID
+      distribution => distribution.id === ANCHOR_RUNTIME_ID
     );
     if (preservedP3.length !== 1) {
-      fail("candidate readback did not preserve the current P3 WineDistribution");
+      fail("candidate readback did not preserve the anchor WineDistribution");
     }
     const sourceP3Text = current.node.getText(current.sourceFile);
     const readbackP3 = preservedP3[0];
     if (readbackP3.node.getText(readbackP3.sourceFile) !== sourceP3Text) {
-      fail("candidate readback changed the current P3 WineDistribution");
+      fail("candidate readback changed the anchor WineDistribution");
     }
 
     try {
@@ -529,7 +529,7 @@ async function main(argv) {
           asarModule: asarPath,
           changedMembers,
           untouchedMemberCount: beforeHashes.size - changedMembers.length,
-          currentP3Preserved: CURRENT_P3_ID,
+          anchorRuntimePreserved: ANCHOR_RUNTIME_ID,
           bundleOperation: operation,
           wineDistributionCount: {
             before: inspected.distributions.length,
