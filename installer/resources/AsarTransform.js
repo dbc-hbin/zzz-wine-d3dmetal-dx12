@@ -248,7 +248,7 @@
     return prior;
   }
 
-  function launchChanges(sourceFile, targetId) {
+  function launchChanges(sourceFile, protectedRuntimeIds) {
     var matches = functionNodes(sourceFile).filter(function (candidate) {
       if (!candidate.body) return false;
       var bodyText = text(candidate.body, sourceFile);
@@ -281,8 +281,8 @@
       if (ts.isCallExpression(expression) && expression.arguments.length === 1 && stringLiteralValue(expression.arguments[0]) === "-use-d3d12" && propertyAccessName(expression.expression) === "push" && isIdentifierNamed(expression.expression.expression, argumentsName)) d3d12Statements.push(node);
     });
 
-    var target = JSON.stringify(targetId);
-    var d3d12Statement = wine + ".attributes.id===" + target + "&&" + wine + ".attributes.renderBackend===\"d3dmetal\"&&" + argumentsName + ".push(\"-use-d3d12\");";
+    var protectedIds = JSON.stringify(protectedRuntimeIds);
+    var d3d12Statement = protectedIds + ".includes(" + wine + ".attributes.id)&&" + wine + ".attributes.renderBackend===\"d3dmetal\"&&" + argumentsName + ".push(\"-use-d3d12\");";
     var changes = d3d12Statements.length ? [{
       start: d3d12Statements[0].getStart(sourceFile),
       end: d3d12Statements[0].end,
@@ -463,6 +463,12 @@
       if (!options || typeof options !== "object" || typeof options.registrationHelperPath !== "string" || !options.registrationHelperPath || typeof options.archivePath !== "string" || !options.archivePath) {
         throw new Error("transform options must include registrationHelperPath and archivePath strings");
       }
+      var protectedRuntimeIds = options.protectedRuntimeIds;
+      if (!Array.isArray(protectedRuntimeIds) || !protectedRuntimeIds.length || protectedRuntimeIds.some(function (id) { return typeof id !== "string" || !id; })) {
+        throw new Error("transform options must include a non-empty protectedRuntimeIds string array");
+      }
+      if (new Set(protectedRuntimeIds).size !== protectedRuntimeIds.length) throw new Error("protectedRuntimeIds must not contain duplicates");
+      if (!protectedRuntimeIds.includes(targetId)) throw new Error("protectedRuntimeIds must include targetId");
       var sourceFile = parse(source);
       var record = JSON.stringify({
         id: targetId,
@@ -480,7 +486,7 @@
         changes.push({ start: array.end - 1, end: array.end - 1, replacement: "," + record });
       }
       changes = changes.concat(localInstallerChanges(sourceFile, targetId));
-      changes = changes.concat(launchChanges(sourceFile, targetId));
+      changes = changes.concat(launchChanges(sourceFile, protectedRuntimeIds));
       changes = changes.concat(updaterChanges(sourceFile, options));
       var output = applyChanges(source, changes);
       var outputFile = parse(output);

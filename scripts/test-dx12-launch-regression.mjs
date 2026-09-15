@@ -13,9 +13,12 @@ const transformerPath = transformerOption === -1
   ? join(repoRoot, "installer/resources/AsarTransform.js")
   : resolve(process.argv[transformerOption + 1]);
 const targetId = "11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-rollback-gptk4b2-arm64server";
+const experimentalId = "wine-11.17-gptk4.0b2-metalfx-experimental";
+const protectedRuntimeIds = [targetId, experimentalId];
 const transformerOptions = {
   registrationHelperPath: "/safe/zzz-wine-register",
   archivePath: "/safe/wine.tar.xz",
+  protectedRuntimeIds,
 };
 
 function staticPropertyName(ts, name) {
@@ -213,7 +216,7 @@ async function assertCatalogLaunches(ts, source, entries, expectedCount) {
 }
 
 function generatedGuard() {
-  return "n.attributes.id===\"" + targetId + "\"&&n.attributes.renderBackend===\"d3dmetal\"&&u.push(\"-use-d3d12\");";
+  return JSON.stringify(protectedRuntimeIds) + ".includes(n.attributes.id)&&n.attributes.renderBackend===\"d3dmetal\"&&u.push(\"-use-d3d12\");";
 }
 
 function historicLaunchSource(transformer, source, replacement) {
@@ -238,7 +241,15 @@ async function assertFixedTransformer(transformer, source) {
   assert.ok(target, "transformed catalog must contain the requested target");
   assert.deepEqual(transformedCatalog.filter(entry => entry.id !== targetId), originalCatalog, "unrelated and prior Wine catalog entries must remain byte-equivalent data");
 
-  await assertCatalogLaunches(transformer.ts, first.source, transformedCatalog, entry => entry.id === targetId ? 1 : 0);
+  await assertCatalogLaunches(transformer.ts, first.source, transformedCatalog, entry => protectedRuntimeIds.includes(entry.id) ? 1 : 0);
+  await assertCatalogLaunches(transformer.ts, first.source, [{
+    id: experimentalId,
+    attributes: { id: experimentalId, renderBackend: "d3dmetal", winePath: "wine" },
+  }], () => 1);
+  await assertCatalogLaunches(transformer.ts, first.source, [{
+    id: experimentalId,
+    attributes: { id: experimentalId, renderBackend: "dxmt", winePath: "wine" },
+  }], () => 0);
 
   const second = transformSource(transformer, first.source);
   assert.equal(second.changed, false, "re-registering an already transformed frontend must be idempotent");

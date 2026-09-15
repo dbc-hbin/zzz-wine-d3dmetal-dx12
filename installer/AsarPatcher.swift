@@ -288,7 +288,11 @@ public struct AsarPatcher {
         let archive = URL(fileURLWithPath: archivePath).standardizedFileURL
         let helper = archive.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(".zzz-wine-registration/zzz-wine-register")
-        let options = ["registrationHelperPath": helper.path, "archivePath": archive.path]
+        let options: [String: Any] = [
+            "registrationHelperPath": helper.path,
+            "archivePath": archive.path,
+            "protectedRuntimeIds": RuntimePackage.protectedRuntimeIds,
+        ]
         guard let function = context.objectForKeyedSubscript("__asarTransform"), let result = function.call(withArguments: [source, RuntimePackage.targetRuntimeId, displayName, archiveURL, options]) else {
             throw AsarPatcherError.transformFailed("Bundled transform did not return a result.")
         }
