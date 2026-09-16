@@ -22,7 +22,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ANCHOR_RUNTIME_ID = "11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-rollback-gptk4b2-arm64server";
 const EXPERIMENTAL_RUNTIME_ID = "wine-11.17-gptk4.0b2-metalfx-experimental";
-const D3D12_RUNTIME_IDS = new Set([ANCHOR_RUNTIME_ID, EXPERIMENTAL_RUNTIME_ID]);
+const FRAME_PROBE_RUNTIME_ID = "wine-11.17-gptk4.0b2-metalfx-frame-probe";
+// Every GPTK 4.0b2 local runtime drives ZZZ through D3DMetal, so the launcher
+// must keep the -use-d3d12 toggle enabled for each of them.
+const D3D12_RUNTIME_IDS = new Set([ANCHOR_RUNTIME_ID, EXPERIMENTAL_RUNTIME_ID, FRAME_PROBE_RUNTIME_ID]);
 const WINE_VERSION = "wine-11.17";
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
