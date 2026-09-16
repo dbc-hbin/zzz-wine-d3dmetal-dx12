@@ -20,6 +20,8 @@ const sourcePaths = [
   "d3dmetal-pso-cache/exposure.hpp", "d3dmetal-pso-cache/exposure.mm",
   "d3dmetal-pso-cache/temporal.hpp", "d3dmetal-pso-cache/temporal.mm",
   "d3dmetal-pso-cache/temporal-contract.hpp",
+  "d3dmetal-pso-cache/frame-probe.hpp", "d3dmetal-pso-cache/frame-probe.mm",
+  "d3dmetal-pso-cache/frame-probe-core.hpp",
   "d3dmetal-pso-cache/function-hooks.hpp", "d3dmetal-pso-cache/function-hooks.mm",
   "d3dmetal-pso-cache/key.hpp", "d3dmetal-pso-cache/key.mm",
   "d3dmetal-pso-cache/ngx-hooks.hpp", "d3dmetal-pso-cache/ngx-hooks.mm",
@@ -102,9 +104,9 @@ const compileArgs = [
   "-isysroot", sdkPath,
   "-mmacosx-version-min=14.0", "-O2", "-Wall", "-Wextra", "-Werror",
   ...(testControls ? ["-DYAAGL_NATIVE_PSO_CACHE_TEST_CONTROLS=1"] : []),
-  "-dynamiclib", "-pthread", "-framework", "Foundation", "-framework", "Metal",
+  "-dynamiclib", "-pthread", "-framework", "Foundation", "-framework", "Metal", "-framework", "QuartzCore",
   "-I", sourceDirectory, "-I", outputDirectory,
-  ...["cache.mm", "exposure.mm", "temporal.mm", "function-cache.mm", "function-hooks.mm", "key.mm", "ngx-hooks.mm", "persistent-cache.mm", "rt-key.mm", "stage-cache.mm", "bridge.mm"].map((file) => resolve(sourceDirectory, file)),
+  ...["cache.mm", "exposure.mm", "temporal.mm", "frame-probe.mm", "function-cache.mm", "function-hooks.mm", "key.mm", "ngx-hooks.mm", "persistent-cache.mm", "rt-key.mm", "stage-cache.mm", "bridge.mm"].map((file) => resolve(sourceDirectory, file)),
   "-Wl,-install_name,@rpath/libYaaglNativePsoCache.dylib", "-o", modulePath,
 ];
 const compiled = spawnSync(compiler, compileArgs, { cwd: root, stdio: "inherit" });
@@ -116,6 +118,9 @@ const diagnosticControls = [
   "YAAGL_METALFX_DIAGNOSTICS",
   "YAAGL_METALFX_LOG",
   "YAAGL_METALFX_EXPOSURE_SCALE_FIX",
+  "YAAGL_METALFX_FRAME_PROBE",
+  "YAAGL_METALFX_PROBE_DIR",
+  "YAAGL_METALFX_PROBE_RESET_HISTORY",
   "YAAGL_METALFX_TEMPORAL",
 ];
 for (const control of diagnosticControls) {

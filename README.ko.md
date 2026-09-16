@@ -104,6 +104,49 @@ v1.0.3은 설치 프로그램만 수정합니다. 동봉된 macOS 26 Wine 아카
 
 `YAAGL_METALFX_DIAGNOSTICS=1`을 설정하고 `YAAGL_METALFX_LOG`에 절대 경로를 지정하면 제한된 JSONL 진단 로그를 기록합니다. 로그 파일 모드는 `0600`이며 8,192개 이벤트 이후 기록을 중단합니다. 공개 API 진입부터 내부 평가, 기록된 명령, replay/encode 단계와 가능한 경우 encode 이후의 실제 MetalFX 속성까지 추적합니다. 상관관계 식별자는 진단용 record/command 식별자이며 엔진 프레임 ID나 GPU 완료 증명이 아닙니다. 평가와 GPU 출력이 성공하더라도 기존 legacy 구현의 `Unsupported feature` 경고는 남을 수 있습니다.
 
+#### 실험적 MetalFX frame probe (이름표/NPC 지연 관찰)
+
+MetalFX temporal scaling 단계에서 이름표가 NPC와 어긋나는 문제를 관찰하기 위한 선택적 진단입니다. NGX 평가, 완료된 MPL 기록, replay, 실제 native MetalFX encode 지점을 후킹하고 GPU 캡처용 `YAAGL.MFX`, `YAAGL.PASS`, `YAAGL.draw` debug group을 남깁니다. 기본값은 꺼짐이며 전역 jitter 부호, motion scale, depth 규약, UI 합성 순서를 바꾸지 않고 셰이더나 카메라 상태도 수정하지 않습니다. 기존 `YAAGL_METALFX_TEMPORAL` 보정은 probe 실행에서 함께 켜지 않습니다.
+
+- `YAAGL_METALFX_FRAME_PROBE=1` — probe를 활성화합니다.
+- `YAAGL_METALFX_PROBE_DIR=<절대 경로 비공개 0700 디렉터리>` — 출력 디렉터리입니다. 절대 경로여야 하고, 본인 소유에 모드 `0700`이어야 하며 symlink는 거부합니다.
+- `YAAGL_METALFX_PROBE_RESET_HISTORY=1` — 두 번째 별도 A/B 실행에서만 사용합니다. 기본값은 꺼짐이며 수정책이 아닙니다.
+- `MTL_CAPTURE_ENABLED=1` — Wine 시작 전에 필요하며, Command Line Tools만이 아니라 full Xcode GPU 도구가 필요합니다.
+
+probe는 반드시 별도 복사본에 설치합니다. 설치된 런타임, 게임 파일, 사용자 prefix를 대상으로 삼지 않습니다:
+
+```bash
+python3 scripts/stage-runtime.py \
+  --wine-source "$HOME/path/to/current/wine" \
+  --wine-dest "$HOME/zzz-wine-frame-probe" \
+  --pristine-d3dmetal <pristine GPTK 4.0b2 D3DMetal 바이너리> \
+  --probe-dir "$HOME/zzz-metalfx-probe" \
+  --check
+```
+
+`--pristine-d3dmetal`에는 순정 GPTK 4.0b2 D3DMetal 바이너리를 지정해야 합니다. SHA-256이 `d3dmetal-pso-cache/layout.json`의 `source.sha256`(`f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3`, Mach-O UUID `674e662b-6b5c-3fd9-9a8a-f415609d2f6a`)과 다르면 도구가 거부하므로, 이미 패치된 바이너리나 설치된 런타임의 D3DMetal을 넘겨서는 안 됩니다. `--check`가 성공한 뒤 **같은 명령에서 `--check`만 제거**해 실행합니다. 이 과정은 x86_64 dylib를 빌드하고, 런타임 전체를 새 디렉터리로 복사하고, 해당 순정 바이너리에 기존 25-hook 패치 layout을 적용하고, 결과물을 설치·서명한 뒤 `wine.real` 실행 직전에 probe 환경을 설정하는 helper를 넣습니다. 설치된 Wine, 게임 파일, 원격 저장소는 수정하지 않으며, 지원하지 않는 wrapper나 지문이 맞지 않는 바이너리는 거부합니다. 이후 평소와 **동일한 prefix·게임 경로·인자**를 유지하고 Wine 경로만 `<wine-dest>/bin/wine`으로 바꿔 ZZZ를 실행합니다.
+
+게임에서 DLSS를 켜고 지연이 나타나는 NPC를 화면에 둔 뒤:
+
+```bash
+python3 scripts/probe-control.py "$PROBE_DIR" list
+python3 scripts/probe-control.py "$PROBE_DIR" capture --presentations 8 --timeout 15
+python3 scripts/probe-control.py "$PROBE_DIR" stop
+
+python3 scripts/analyze-probe.py "$PROBE_DIR/probe-<pid>-SESSION.jsonl"
+```
+
+`ready-<pid>.json`은 MPL NGX 평가를 실제로 관측한 프로세스에만 생기며, 후보가 여러 개면 PID를 추측하지 말고 `--pid`로 지정합니다. 캡처는 device 전체를 대상으로 하고 실행 중 프레임이 느려질 수 있습니다. `capture requested`는 요청을 기록했다는 뜻일 뿐이므로 로그에 `capture_started`와 `capture_stopped`가 실제로 있는지 확인하고, `capture_unavailable`, `NO_NATIVE_ENCODE`, timeout 종료는 실패로 취급합니다. 8회는 device에서 관측한 presentation callback 수이지 확정된 `Present[N]` 개수가 아니므로 첫 1~2개와 마지막 불완전 구간은 버립니다. analyzer는 정확히 한 프로세스·한 실행의 로그에만 사용하고 `<log>.report.json`과 `<log>.report.encodes.csv`를 만듭니다. writer는 비동기이며 실행당 64MiB로 제한되므로, capacity 또는 overflow 경고가 있으면 그 로그는 불완전한 것으로 봅니다.
+
+`.gputrace`를 Xcode로 열고 **`YAAGL.MFX` 그룹을 먼저** 찾습니다. 대응하는 JSON `encode_before`에서 실제 bound color/output/depth/motion 객체를 확인할 수 있습니다. 이어서 다음을 따라갑니다. **A**는 실제 MetalFX가 읽는 color, **B**는 실제 MetalFX 출력, **C**는 presentation에 사용한 drawable texture입니다. `YAAGL.PASS`는 attachment와 command buffer 연결 표식, `YAAGL.draw`는 후보 이름표 draw 표식입니다. 텍셀 자체는 JSON에 없으므로 native trace에서 해당 이벤트의 리소스 상태를 직접 비교합니다.
+
+한계는 다음과 같습니다.
+
+- `eval_id`, `record_id`, `encode_id`, `object oid`, `acquisition_id`는 진단용 식별자이며 엔진 프레임 ID도 GPU 완료 증명도 아닙니다. `record_bytes_match`는 CPU command bytes가 같다는 뜻일 뿐입니다.
+- JSON은 **CPU 쪽 command bytes와 바인딩만** 증명합니다. MetalFX 입력 텍셀, buffer가 카메라 행렬로서 갖는 의미, 어느 장면 프레임이 늦는지는 판정하지 못합니다. 주소가 반복되어도 동일한 영상 내용이라는 뜻이 아닙니다.
+- 캡처는 타이밍을 바꾸므로 FPS 벤치마크나 성능 기준선으로 사용하지 않습니다.
+- probe는 이름표 지연을 수정하지도, 검증하지도 않으며 수정책으로 제시해서는 안 됩니다. 캡처를 요청했다는 사실은 캡처 성공을 의미하지 않습니다.
+
 ### 5. 커서 소유권과 RawInput 분리 (`0004-macdrv-reset-rawinput-baseline.patch`)
 - 네이티브 커서 표시와 창 판정은 유지하고, 커서 소유권 동기화가 포인터 좌표를 변경하지 않도록 분리했습니다.
 - warp 변위를 보정한 마우스 이동량을 포인터 좌표와 별도로 전달합니다. 첫 실제 이동을 버리지 않고 소수 이동량과 이벤트 병합을 보존합니다.
@@ -194,6 +237,15 @@ NGX_SDK_INCLUDE=/path/to/NVIDIA-NGX-SDK/include
 이 실행 파일은 복사한 테스트 런타임과 폐기 가능한 격리 Wine prefix에서만 실행하고 게임 또는 사용자 prefix에는 실행하지 마세요. 종료 상태 0과 `NGX_SMOKE_PASS`가 성공 조건입니다. 패키지 Wine wrapper는 `D3DM_MTL4=1`을 강제합니다. legacy 경로를 의도적으로 검사할 때는 wrapper에 `D3DM_MTL4=0`을 설정하지 말고, 격리 런타임의 `wine.real`과 필요한 legacy 환경을 사용해 wrapper를 우회하세요.
 
 설치 앱 빌드에는 새 `build/wine-tuned/package/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` 아카이브 또는 명시적인 `RUNTIME_ARCHIVE_SOURCE`가 필요합니다. 기존에 설치된 오래된 런타임을 대신 포함하지 않습니다.
+
+### frame probe 호스트 테스트 빌드 및 실행
+
+```bash
+bash scripts/test-frame-probe-native.sh
+python3 scripts/test-frame-probe-tools.py
+```
+
+`scripts/test-frame-probe-native.sh`는 ASan/UBSan 기반의 portable C++ ledger 테스트를 빌드·실행하고, macOS에서는 probe 런타임 훅의 CPU 전용 Objective-C mock도 함께 실행합니다. 이 mock은 probe의 상태 전이만 검사하며 GPU 캡처와 ZZZ 실행은 다루지 않습니다. `scripts/test-frame-probe-tools.py`는 analyzer, 캡처 제어 CLI, staging 가드 검사를 수행합니다. 모듈 빌드는 기존과 동일한 `node scripts/build-d3dmetal-pso-cache.mjs <out-dir>`이며, 이제 `d3dmetal-pso-cache/frame-probe.mm`도 함께 컴파일하고 QuartzCore를 링크합니다.
 
 ### DX12 실행 회귀 테스트
 

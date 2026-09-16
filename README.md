@@ -104,6 +104,49 @@ This build integrates several targeted patches into upstream Wine 11.17 to ensur
 
 Set `YAAGL_METALFX_DIAGNOSTICS=1` and `YAAGL_METALFX_LOG` to an absolute path to emit bounded JSONL diagnostics. The log is created with mode `0600` and stops after 8,192 events. Events trace public API entry through the internal evaluation, recorded command, and replay/encode stages, with post-encode MetalFX properties where available. Correlation identifiers are diagnostic record/command identities, not engine frame IDs or proof of GPU completion. A legacy `Unsupported feature` warning from the original implementation may remain even when evaluation and GPU output succeed.
 
+#### Experimental MetalFX frame probe (nameplate/NPC lag observation)
+
+An opt-in, observation-only probe for the nameplate/NPC mismatch that appears around MetalFX temporal scaling. It hooks NGX evaluation, the completed MPL record, replay, and the native MetalFX encode, and emits `YAAGL.MFX`, `YAAGL.PASS`, and `YAAGL.draw` debug groups for GPU capture. It is off by default, changes no global jitter sign, motion scale, depth convention, or UI composition order, and does not modify shader or camera state. The older `YAAGL_METALFX_TEMPORAL` repair is not enabled in probe runs.
+
+- `YAAGL_METALFX_FRAME_PROBE=1` — enable the probe.
+- `YAAGL_METALFX_PROBE_DIR=<absolute private 0700 directory>` — output directory. It must be absolute, owned by you, mode `0700`, and not a symlink; anything else is refused.
+- `YAAGL_METALFX_PROBE_RESET_HISTORY=1` — second, separate A/B run only; default off; not a fix.
+- `MTL_CAPTURE_ENABLED=1` — required before Wine starts, and it needs full Xcode GPU tools, not Command Line Tools alone.
+
+Stage the probe into an isolated copy. Never target the installed runtime, a game, or a user prefix:
+
+```bash
+python3 scripts/stage-runtime.py \
+  --wine-source "$HOME/path/to/current/wine" \
+  --wine-dest "$HOME/zzz-wine-frame-probe" \
+  --pristine-d3dmetal <pristine GPTK 4.0b2 D3DMetal binary> \
+  --probe-dir "$HOME/zzz-metalfx-probe" \
+  --check
+```
+
+`--pristine-d3dmetal` must be a pristine GPTK 4.0b2 D3DMetal binary. The tool refuses anything whose SHA-256 is not `source.sha256` in `d3dmetal-pso-cache/layout.json` (`f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3`, Mach-O UUID `674e662b-6b5c-3fd9-9a8a-f415609d2f6a`), so never pass an already-patched binary or the installed runtime's own D3DMetal. After `--check` succeeds, run the same command without `--check`. It builds the x86_64 dylib, copies the runtime into a new directory, applies the existing 25-hook patch layout to that pristine binary, installs and signs the result, and writes a helper that sets the probe environment before `wine.real`. The installed Wine, game files, and remote repositories are not modified; an unsupported wrapper or an unknown binary fingerprint is rejected. Start ZZZ exactly as usual — same prefix, game path, and arguments — changing only the Wine binary to the produced `<wine-dest>/bin/wine`.
+
+With DLSS enabled and the lagging NPC on screen:
+
+```bash
+python3 scripts/probe-control.py "$PROBE_DIR" list
+python3 scripts/probe-control.py "$PROBE_DIR" capture --presentations 8 --timeout 15
+python3 scripts/probe-control.py "$PROBE_DIR" stop
+
+python3 scripts/analyze-probe.py "$PROBE_DIR/probe-<pid>-SESSION.jsonl"
+```
+
+`ready-<pid>.json` is written only for a process that actually observed MPL NGX evaluation; pass `--pid` when several candidates exist rather than letting a PID be guessed. Capture targets the whole device and slows frames while it runs. `capture requested` means the request was written only: require `capture_started` and `capture_stopped` in the log, and treat `capture_unavailable`, `NO_NATIVE_ENCODE`, and timeout exits as failures. The 8 presentations are presentation callbacks on the device, not a confirmed `Present[N]` count, so discard the first one or two frames and the last incomplete segment. The analyzer is run on exactly one process/run and writes `<log>.report.json` and `<log>.report.encodes.csv`; the writer is asynchronous and bounded at 64 MiB per run, and overflow or full-capacity warnings mean the log is incomplete.
+
+Open the `.gputrace` in Xcode and locate the `YAAGL.MFX` groups first; the matching JSON `encode_before` shows the actually bound color/output/depth/motion objects. Follow A, B, and C: **A** is the color the real MetalFX reads, **B** is the real MetalFX output, and **C** is the drawable texture actually used for presentation. `YAAGL.PASS` marks attachment/command-buffer linkage and `YAAGL.draw` marks candidate nameplate draws. Compare A/B/C resource state at those events in the native trace; the JSON does not carry texels.
+
+Limits, stated explicitly:
+
+- `eval_id`, `record_id`, `encode_id`, `object oid`, and `acquisition_id` are diagnostic identities, not engine frame IDs and not proof of GPU completion. `record_bytes_match` means the CPU command bytes agree only.
+- The JSON proves CPU-side command bytes and bindings only. It cannot show MetalFX input texels, what a buffer means as a camera matrix, or which scene frame is late; repeated addresses do not mean identical image content.
+- Capture changes timing, so a capture run is not an FPS benchmark and not a performance baseline.
+- The probe does not fix or verify the nameplate lag and must not be presented as a fix. A requested capture is not a successful one.
+
 ### 5. Cursor Ownership & RawInput Separation (`0004-macdrv-reset-rawinput-baseline.patch`)
 - Preserves native cursor display and window routing while making ownership synchronization independent of cursor position.
 - Sends warp-corrected mouse deltas separately from pointer coordinates, preserving fractional motion and event coalescing without dropping the first real movement.
@@ -203,6 +246,15 @@ python3 scripts/check-ngx-exposure-log.py mpl "$MPL_LOG" "$MPL_STDOUT"
 The checker is specific to the serialized smoke fixture. It verifies 1×1 R16Float fallback exposure, unchanged explicit exposure textures, no override for automatic/neutral exposure, and no invented reactive mask. The old Legacy `+0xb0/+0xb8` injection fails this check despite `NGX_SMOKE_PASS`; the corrected `+0x58` exposure binding passes. MPL must pass with both modules. Correction and diagnostics remain off by default.
 
 The installer build requires the new `build/wine-tuned/package/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` archive (or an explicit `RUNTIME_ARCHIVE_SOURCE`). It does not silently bundle an older installed runtime.
+
+### Build and run the frame probe host tests
+
+```bash
+bash scripts/test-frame-probe-native.sh
+python3 scripts/test-frame-probe-tools.py
+```
+
+`scripts/test-frame-probe-native.sh` builds and runs the portable C++ ledger test under ASan/UBSan and, on macOS, a CPU-only Objective-C mock of the probe's runtime hooks. The mock checks probe state transitions only; GPU capture and ZZZ are not covered. `scripts/test-frame-probe-tools.py` covers the analyzer, the capture control CLI, and the staging guards. The module build itself is the normal `node scripts/build-d3dmetal-pso-cache.mjs <out-dir>`, which now also compiles `d3dmetal-pso-cache/frame-probe.mm` and links QuartzCore.
 
 ### DX12 launch regression tests
 

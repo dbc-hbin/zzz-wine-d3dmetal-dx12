@@ -34,6 +34,9 @@ bool gFactoryHooked = false;
 constexpr std::uint64_t kAmbiguous = UINT64_MAX;
 std::atomic<std::uint64_t> gEncodeID{0};
 
+template<class F> F originalIMP(IMP p) noexcept {
+    static_assert(sizeof(F)==sizeof(IMP));F result;std::memcpy(&result,&p,sizeof(result));return result;
+}
 template<class T> T loadAt(const void* p, std::size_t offset) noexcept {
     T value{};
     if (p) std::memcpy(&value, static_cast<const char*>(p) + offset, sizeof(value));
@@ -112,7 +115,7 @@ void installEncodeHook(id object) {
     std::free(ret); std::free(arg);
     if (!signatureOK) { event("encode_signature_unexpected", object); return; }
     using EncodeIMP = void(*)(id, SEL, id);
-    const EncodeIMP previous = reinterpret_cast<EncodeIMP>(method_getImplementation(method));
+    const EncodeIMP previous = originalIMP<EncodeIMP>(method_getImplementation(method));
     // Blocks capture the preceding implementation, including inherited IMPs.
     // Install only on the concrete class; never overwrite a superclass IMP.
     IMP replacement = imp_implementationWithBlock(^void(id self, id commandBuffer) {
@@ -150,7 +153,7 @@ void installFactoryHook() {
     std::free(ret);
     if (!signatureOK) return;
     using Factory = id(*)(id, SEL, id, id);
-    const Factory previous = reinterpret_cast<Factory>(method_getImplementation(method));
+    const Factory previous = originalIMP<Factory>(method_getImplementation(method));
     IMP replacement = imp_implementationWithBlock(^id(id descriptor, id device, id compiler) {
         const int ae = getBool(descriptor, "isAutoExposureEnabled");
         const int jm = getBool(descriptor, "isJitteredMotionVectorsEnabled");
