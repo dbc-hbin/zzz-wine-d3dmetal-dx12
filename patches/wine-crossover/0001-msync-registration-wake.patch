@@ -1,0 +1,45 @@
+From: Yaagl CrossOver runtime build
+Subject: [PATCH] msync: block while waiting for registration acknowledgement
+
+The client currently busy-spins while the server installs a wait registration.
+Use the existing shared ulock state as a registration acknowledgement: wait
+while it remains 2, and wake the waiter after the server publishes state 1.
+The compare-and-wait operation avoids a lost wake when registration completes
+between the client load and kernel wait.
+
+This preserves the existing 2 -> 1 registration protocol, contention checks,
+timeout accounting, unregister ordering, and object lifetime handling.
+
+---
+ dlls/ntdll/unix/msync.c | 2 ++
+ server/msync.c          | 3 ++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/dlls/ntdll/unix/msync.c b/dlls/ntdll/unix/msync.c
+--- a/dlls/ntdll/unix/msync.c
++++ b/dlls/ntdll/unix/msync.c
+@@ -388,6 +388,8 @@ static NTSTATUS msync_wait_multiple( const int *objs, void **objs_shm, int alert
+             }
+             return STATUS_PENDING;
+         }
++
++        ulock_wait( UL_COMPARE_AND_WAIT_SHARED | ULF_NO_ERRNO, addr, 2, 0 );
+     }
+ 
+     do
+diff --git a/server/msync.c b/server/msync.c
+--- a/server/msync.c
++++ b/server/msync.c
+@@ -515,8 +515,9 @@ static void *mach_message_pump(void *args)
+             add_tid( receive_message.shm_idx[i], tid );
+             if (i == count - 1)
+             {
+-                /* The client can stop spinning and safely start waiting now */
++                /* The client can stop waiting for registration and safely start waiting now. */
+                 __atomic_store_n( shm_tid_map + tid, 1, __ATOMIC_RELEASE );
++                __ulock_wake( UL_COMPARE_AND_WAIT_SHARED, shm_tid_map + tid, 0 );
+             }
+         }
+     }
+-- 
+2.50.1
