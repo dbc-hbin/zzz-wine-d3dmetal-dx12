@@ -191,7 +191,16 @@ NGX_SDK_INCLUDE=/path/to/NVIDIA-NGX-SDK/include
   -ld3d12 -ldxgi -luuid -o build/ngx-smoke.exe
 ```
 
-Run this executable only with a disposable, isolated Wine prefix and a copied test runtime—never a game or user prefix. Success is exit status 0 plus `NGX_SMOKE_PASS`. The packaged Wine wrapper forces `D3DM_MTL4=1`; when deliberately exercising the legacy path, bypass it with that isolated runtime's `wine.real` and the required legacy environment instead of setting `D3DM_MTL4=0` on the wrapper.
+Run this executable only with a disposable, isolated Wine prefix and a copied test runtime—never a game or user prefix. The GPU output check requires exit status 0 plus `NGX_SMOKE_PASS`, but this alone does not prove correct exposure binding. The packaged Wine wrapper forces `D3DM_MTL4=1`; to exercise Legacy, use the isolated runtime's `wine.real` with `D3DM_MTL4=0` and the same package-relative library environment rather than setting that variable on the wrapper.
+
+For exposure regression checks, run with `YAAGL_METALFX_EXPOSURE_SCALE_FIX=1`, `YAAGL_METALFX_DIAGNOSTICS=1`, and `YAAGL_METALFX_LOG` pointing to a fresh absolute log path. Capture fixture stdout separately, then check the actual post-encode scaler bindings:
+
+```bash
+python3 scripts/check-ngx-exposure-log.py legacy "$LEGACY_LOG" "$LEGACY_STDOUT"
+python3 scripts/check-ngx-exposure-log.py mpl "$MPL_LOG" "$MPL_STDOUT"
+```
+
+The checker is specific to the serialized smoke fixture. It verifies 1×1 R16Float fallback exposure, unchanged explicit exposure textures, no override for automatic/neutral exposure, and no invented reactive mask. The old Legacy `+0xb0/+0xb8` injection fails this check despite `NGX_SMOKE_PASS`; the corrected `+0x58` exposure binding passes. MPL must pass with both modules. Correction and diagnostics remain off by default.
 
 The installer build requires the new `build/wine-tuned/package/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` archive (or an explicit `RUNTIME_ARCHIVE_SOURCE`). It does not silently bundle an older installed runtime.
 

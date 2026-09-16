@@ -44,8 +44,8 @@ ApplyResult patchMplDescriptor(void* commandList, void* descriptor) noexcept;
 ApplyResult recordLegacyScale(void* command) noexcept;
 
 // Builds an execution-local legacy command and fresh exposure texture.
-// The native +0xb0 path transfers the creation reference into its GPU resource
-// owner. handoffCommand() returns the original on every no-op or
+// The native +0x58 exposure slot transfers the creation reference into its GPU
+// resource owner. handoffCommand() returns the original on every no-op or
 // failure path, avoiding allocation when no valid metadata was recorded.
 class LegacyEncodeScope final {
 public:

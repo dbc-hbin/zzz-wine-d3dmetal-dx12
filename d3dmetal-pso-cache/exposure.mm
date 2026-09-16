@@ -116,14 +116,15 @@ LegacyEncodeScope::LegacyEncodeScope(void* encoder, const void* command) noexcep
     @try {
         texture = makeTexture((__bridge id<MTLTexture>)reference, scale);
         if (texture == nil) { result_ = ApplyResult::Failed; return; }
-        // The original +0xb0 path registers this texture with encoder+0x2c0
+        // The native +0x58 exposure slot (setExposureTexture, footer at
+        // +0x13051b..+0x13053e) registers this texture with encoder+0x2c0
         // and immediately releases the incoming creation reference. Transfer
         // this +1 exactly once; pre-registering would duplicate the owner entry.
+        // The reactive mask pair at +0xb0/+0xb8 is consumed by native Encode
+        // as recorded and must stay exactly as the command carries it.
         texture_ = (__bridge void*)texture;
         void* borrowed = texture_;
-        store(local_.data(), 0xb0, &borrowed, sizeof(borrowed));
-        const void* nullTexture = nullptr;
-        store(local_.data(), 0xb8, &nullTexture, sizeof(nullTexture));
+        store(local_.data(), 0x58, &borrowed, sizeof(borrowed));
         result_ = ApplyResult::Applied;
     } @catch (id) {
         if (texture != nil && texture_ == nullptr) [texture release];
