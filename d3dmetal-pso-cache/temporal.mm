@@ -1,4 +1,5 @@
 #import "temporal.hpp"
+#import "metalfx-backend.hpp"
 #import <Foundation/Foundation.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -155,6 +156,7 @@ void installFactoryHook() {
     using Factory = id(*)(id, SEL, id, id);
     const Factory previous = originalIMP<Factory>(method_getImplementation(method));
     IMP replacement = imp_implementationWithBlock(^id(id descriptor, id device, id compiler) {
+        if (metalfx::independentFactoryActive()) return previous(descriptor, sel, device, compiler);
         const int ae = getBool(descriptor, "isAutoExposureEnabled");
         const int jm = getBool(descriptor, "isJitteredMotionVectorsEnabled");
         const int om = getBool(descriptor, "isOutputResolutionMotionVectorsEnabled");

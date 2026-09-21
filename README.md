@@ -98,6 +98,35 @@ This build integrates several targeted patches into upstream Wine 11.17 to ensur
 - Dedupes shader compilation and retains compiled PSOs across the device lifetime.
 - Cache warmup ensures smooth combat and scene transitions from the very first run.
 
+#### FSR → MetalFX private runtime with MetalFX frame interpolation
+
+The FSR translator development profile exposes an AMD Radeon RX 9070 (`0x1002:0x7550`) and overrides the canonical upscaler and frame-generation DLLs with builtins. Upscaling remains the existing FSR API → MetalFX path. Frame-generation effect `0x20000` is translated to MetalFX frame interpolation when the actual command-buffer mode and Apple support predicate allow it; swapchain effect `0x30000`, explicit native-version selection, and unsupported conditions are forwarded to the original AMD implementation. The original loader is unchanged.
+
+```bash
+python3 scripts/stage-runtime.py --wine-source <seed-wine> --wine-dest <private-wine> \
+  --patched-d3dmetal <validated-patched-D3DMetal> --build-dir <private-build> --play --fsr-translator
+python3 scripts/stage-runtime.py --verify-runtime <private-wine> --current-sources
+```
+
+Staging reads the installed original `amd_fidelityfx_framegeneration_dx12.dll` without modifying it, verifies its pinned SHA-256, x86-64 PE architecture, and five exports, then copies it read-only under the private non-canonical name `amd_fidelityfx_framegeneration_dx12_native.dll`. The last-hop helper binds `YAAGL_FSR_FG_NATIVE_DLL` to that runtime’s absolute path; the proxy loads it explicitly, not via its virtual `C:\windows\system32` builtin module name. This prevents recursive canonical loading. The manifest records source provenance and signed hashes. `WINEDLLOVERRIDES` selects only the canonical upscaler and frame-generation builtins; it does not override the loader or the renamed native fallback.
+
+Frame interpolation requires macOS 26 or newer. Selection is deferred until the first Prepare resolves the real Metal device and command-buffer mode: legacy uses Apple’s `supportsDevice:` and device-only factory; Metal4 uses `supportsMetal4FX:` and the compiler-taking factory. A Metal4 command buffer is never passed to the legacy effect. Unsupported matching-mode support/factory creation or unsupported FSR input contracts select the original FSR provider before translation is active. Explicit original-provider IDs remain available. Once translation has recorded work, errors do not trigger a second, native interpolation pass.
+
+The native FSR swapchain retains presentation timing and UI composition. Prepare snapshots depth/motion on the caller’s command list; interpolation keeps private previous-color history and writes back on the supplied interpolation command list. HUD-less input, jittered/display-resolution motion input, and AMD debug modes currently use native FSR rather than dropping their semantics. Every GPU uses the system-default MetalFX implementation.
+
+Self-contained verification (does not launch the game):
+
+```bash
+python3 scripts/test-metalfx-native.py --out <native-evidence>
+python3 scripts/test-fsr-launch-profile.py
+python3 scripts/test-fsr-translator.py --runtime <private-wine> --out <upscaler-evidence>
+python3 scripts/test-fsr-translator.py --frame-generation --runtime <private-wine> --out <fg-evidence>
+```
+
+The FG smoke checks GPU-readback intermediates against moving-pattern midpoints after startup/reset warm-up, native-provider override, unsupported HUD-less fallback, and a real DXGI swapchain with 70 disabled frames followed by eight interpolation callbacks. It also drains presents before context destruction. These isolated checks do not establish game-specific visual quality or support on untested older hardware; game execution testing is intentionally deferred.
+
+On every Mac, temporal scaling uses the system-default MetalFX model. Private BBR forcing, BBR fallback policy, and V4 model overrides are not used. The FSR API adapter follows the pinned provider's null-output query no-op behavior and identifies a logical D3D12 device by `ID3D12Device::GetAdapterLuid`, not raw COM tear-off pointer equality; command lists and resources must report the same adapter LUID. This validates the available single-adapter runtime but is not a physical multi-adapter test. The translator runs MetalFX rather than AMD's FSR4 neural network. For Ultra Performance only when the requested output exceeds MetalFX's 3× temporal limit, the translator keeps the caller's output texture and computes one uniform scale `s = min(device maximum, output width / input width, output height / input height)`, uses `floor(input width × s)` by `floor(input height × s)` for MetalFX, then centers that result and clears the unused margins to black (an odd remainder stays on the opposite edge). This applies dynamically to 1080p, 1440p, 4K, odd-sized outputs, and resolution changes; for example, 1248×696 into 3840×2160 runs MetalFX at 3744×2088 at (48,36), leaving 48-pixel horizontal and 36-pixel vertical borders. The current 4K display is the only physical monitor exercised; 1080p, 1440p, odd dimensions, and resolution switching are GPU/backend scenario checks, not claims about other physical monitors. It does not expose an input-size control or add a spatial scaling pass; dispatches at or below 3× keep the existing full-frame path. Existing releases and installed runtimes are not updated automatically; stage and run only a private copy.
+
 #### Experimental NGX exposure correction and diagnostics
 
 `YAAGL_METALFX_EXPOSURE_SCALE_FIX=1` opts in to a narrowly scoped experimental correction. For manual-exposure HDR evaluations with no auto-exposure and no caller-provided exposure texture, a finite positive `DLSS.Exposure.Scale` other than `1` is represented by an internal 1×1 `R16Float` exposure texture. Existing exposure textures and `DLSS.Pre.Exposure` are left untouched; missing scale, `0`, and `1` are skipped. The correction is off by default. It does not claim NVIDIA-equivalent output and is not a jitter fix.
@@ -124,7 +153,7 @@ python3 scripts/stage-runtime.py \
   --check
 ```
 
-`--pristine-d3dmetal` must be a pristine GPTK 4.0b2 D3DMetal binary. The tool refuses anything whose SHA-256 is not `source.sha256` in `d3dmetal-pso-cache/layout.json` (`f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3`, Mach-O UUID `674e662b-6b5c-3fd9-9a8a-f415609d2f6a`), so never pass an already-patched binary or the installed runtime's own D3DMetal. After `--check` succeeds, run the same command without `--check`. It builds the x86_64 dylib, copies the runtime into a new directory, applies the existing 25-hook patch layout to that pristine binary, installs and signs the result, and writes a helper that sets the probe environment before `wine.real`. The installed Wine, game files, and remote repositories are not modified; an unsupported wrapper or an unknown binary fingerprint is rejected. Start ZZZ exactly as usual — same prefix, game path, and arguments — changing only the Wine binary to the produced `<wine-dest>/bin/wine`.
+`--pristine-d3dmetal` must be a pristine GPTK 4.0b2 D3DMetal binary. The tool refuses anything whose SHA-256 is not `source.sha256` in `d3dmetal-pso-cache/layout.json` (`f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3`, Mach-O UUID `674e662b-6b5c-3fd9-9a8a-f415609d2f6a`), so never pass an already-patched binary or the installed runtime's own D3DMetal. After `--check` succeeds, run the same command without `--check`. It builds the x86_64 dylib, copies the runtime into a new directory, applies the existing 29-hook patch layout to that pristine binary, installs and signs the result, and writes a helper that sets the probe environment before `wine.real`. The installed Wine, game files, and remote repositories are not modified; an unsupported …
 
 With DLSS enabled and the lagging NPC on screen:
 
@@ -136,7 +165,7 @@ python3 scripts/probe-control.py "$PROBE_DIR" stop
 python3 scripts/analyze-probe.py "$PROBE_DIR/probe-<pid>-SESSION.jsonl"
 ```
 
-`ready-<pid>.json` is written only for a process that actually observed MPL NGX evaluation; pass `--pid` when several candidates exist rather than letting a PID be guessed. Capture targets the whole device and slows frames while it runs. `capture requested` means the request was written only: require `capture_started` and `capture_stopped` in the log, and treat `capture_unavailable`, `NO_NATIVE_ENCODE`, and timeout exits as failures. The 8 presentations are presentation callbacks on the device, not a confirmed `Present[N]` count, so discard the first one or two frames and the last incomplete segment. The analyzer is run on exactly one process/run and writes `<log>.report.json` and `<log>.report.encodes.csv`; the writer is asynchronous and bounded at 64 MiB per run, and overflow or full-capacity warnings mean the log is incomplete.
+`ready-<pid>.json` is written only for a process that actually observed MPL NGX evaluation; pass `--pid` when several candidates exist rather than letting a PID be guessed. Capture targets the whole device and slows frames while it runs. `capture requested` means the request was written only: require `capture_started` and `capture_stopped` in the log, and treat `capture_unavailable`, `NO_NATIVE_ENCODE`, and timeout exits as failures. The 8 presentations are presentation callbacks on the device, not a confirmed `Present[N]` count, so discard the first one or two frames and the last incomplete segment. The analyzer is run on exactly one process/run and writes `<log>.report.json` and `<log>.report.encodes.csv`; the writer is asynchronous and bounded at 64 Mi…
 
 Open the `.gputrace` in Xcode and locate the `YAAGL.MFX` groups first; the matching JSON `encode_before` shows the actually bound color/output/depth/motion objects. Follow A, B, and C: **A** is the color the real MetalFX reads, **B** is the real MetalFX output, and **C** is the drawable texture actually used for presentation. `YAAGL.PASS` marks attachment/command-buffer linkage and `YAAGL.draw` marks candidate nameplate draws. Compare A/B/C resource state at those events in the native trace; the JSON does not carry texels.
 
@@ -270,3 +299,8 @@ The checked-in fixture contains excerpts of Yaagl 0.3.18 source; no Wine build o
 
 - Wine source code is licensed under the **GNU Lesser General Public License (LGPL v2.1+)**.
 - D3DMetal wrapper components and installer tools are licensed under the terms included in this repository.
+
+
+Wall time: 0.04 seconds
+
+[Some lines truncated to 768 bytes. Read artifact://4289 for full output]

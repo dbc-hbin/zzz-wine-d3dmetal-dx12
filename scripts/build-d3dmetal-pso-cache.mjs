@@ -25,6 +25,18 @@ const sourcePaths = [
   "d3dmetal-pso-cache/function-hooks.hpp", "d3dmetal-pso-cache/function-hooks.mm",
   "d3dmetal-pso-cache/key.hpp", "d3dmetal-pso-cache/key.mm",
   "d3dmetal-pso-cache/ngx-hooks.hpp", "d3dmetal-pso-cache/ngx-hooks.mm",
+  "d3dmetal-pso-cache/metalfx-contract.hpp",
+  "d3dmetal-pso-cache/metalfx-backend.hpp", "d3dmetal-pso-cache/metalfx-backend.mm",
+  "d3dmetal-pso-cache/d3dmetal-transport.hpp", "d3dmetal-pso-cache/d3dmetal-transport.mm",
+  "d3dmetal-pso-cache/d3dmetal-transport-legacy.hpp", "d3dmetal-pso-cache/d3dmetal-transport-legacy.mm",
+  "d3dmetal-pso-cache/fsr-contract.hpp", "d3dmetal-pso-cache/fsr-contract.cpp",
+  "d3dmetal-pso-cache/fsr-translator.hpp", "d3dmetal-pso-cache/fsr-translator.mm",
+  "d3dmetal-pso-cache/fsr-framegeneration.hpp", "d3dmetal-pso-cache/fsr-framegeneration.mm",
+  "include/yaagl_fsr_fg_bridge.h", "d3dmetal-pso-cache/fsr-kernels.metal",
+  "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/ffx_api.h",
+  "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/ffx_api_types.h",
+  "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/dx12/ffx_api_dx12.h",
+  "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/upscalers/include/ffx_upscale.h",
   "d3dmetal-pso-cache/persistent-cache.hpp", "d3dmetal-pso-cache/persistent-cache.mm",
   "d3dmetal-pso-cache/rt-key.hpp", "d3dmetal-pso-cache/rt-key.mm",
   "d3dmetal-pso-cache/stage-cache.hpp", "d3dmetal-pso-cache/stage-cache.mm",
@@ -46,8 +58,9 @@ const hookNames = [
   "NgxEvaluateMPL", "NgxEvaluateMTL", "TemporalScaleMPL",
   "ReplayTemporalScaleMPL", "EncodeTemporalScaleMTL",
   "LegacyRecordComplete", "MplRecordComplete", "NgxD3D12EvaluateFeature",
+  "NgxD3D12CreateFeature", "NgxD3D12ReleaseFeature", "NgxD3D12Shutdown", "NgxD3D12Shutdown1",
 ];
-if (layout.formatVersion !== 4 || layout.hooks.length !== hookNames.length ||
+if (layout.formatVersion !== 7 || layout.hooks.length !== hookNames.length ||
     layout.hooks.some((hook, index) => hook.id !== hookNames[index] || hook.dispatchFieldOffset !== index * 8)) {
   throw new Error("unsupported native PSO dispatch layout");
 }
@@ -89,6 +102,12 @@ const header = [
 ].join("\n");
 mkdirSync(outputDirectory, { recursive: true });
 writeFileSync(resolve(outputDirectory, "layout.hpp"), header);
+const fsrKernelSource = readFileSync(resolve(sourceDirectory, "fsr-kernels.metal"), "utf8");
+if (fsrKernelSource.includes(")YAAGL_METAL\"")) {
+  throw new Error("FSR Metal source collides with its generated raw-string delimiter");
+}
+writeFileSync(resolve(outputDirectory, "fsr-kernels.inc"),
+  `static const char kFsrKernelsSource[] = R"YAAGL_METAL(${fsrKernelSource})YAAGL_METAL";\n`);
 
 const compilerLookup = spawnSync("xcrun", ["--find", "clang++"], { encoding: "utf8" });
 if (compilerLookup.status !== 0) throw new Error(compilerLookup.stderr || "clang++ unavailable");
@@ -104,9 +123,9 @@ const compileArgs = [
   "-isysroot", sdkPath,
   "-mmacosx-version-min=14.0", "-O2", "-Wall", "-Wextra", "-Werror",
   ...(testControls ? ["-DYAAGL_NATIVE_PSO_CACHE_TEST_CONTROLS=1"] : []),
-  "-dynamiclib", "-pthread", "-framework", "Foundation", "-framework", "Metal", "-framework", "QuartzCore",
+  "-dynamiclib", "-pthread", "-framework", "Foundation", "-framework", "Metal", "-framework", "QuartzCore", "-framework", "MetalFX",
   "-I", sourceDirectory, "-I", outputDirectory,
-  ...["cache.mm", "exposure.mm", "temporal.mm", "frame-probe.mm", "function-cache.mm", "function-hooks.mm", "key.mm", "ngx-hooks.mm", "persistent-cache.mm", "rt-key.mm", "stage-cache.mm", "bridge.mm"].map((file) => resolve(sourceDirectory, file)),
+  ...["cache.mm", "exposure.mm", "temporal.mm", "frame-probe.mm", "function-cache.mm", "function-hooks.mm", "key.mm", "ngx-hooks.mm", "metalfx-backend.mm", "d3dmetal-transport.mm", "d3dmetal-transport-legacy.mm", "fsr-contract.cpp", "fsr-translator.mm", "fsr-framegeneration.mm", "persistent-cache.mm", "rt-key.mm", "stage-cache.mm", "bridge.mm"].map((file) => resolve(sourceDirectory, file)),
   "-Wl,-install_name,@rpath/libYaaglNativePsoCache.dylib", "-o", modulePath,
 ];
 const compiled = spawnSync(compiler, compileArgs, { cwd: root, stdio: "inherit" });
@@ -114,7 +133,14 @@ if (compiled.error) throw compiled.error;
 if (compiled.status !== 0) process.exit(compiled.status ?? 1);
 
 const moduleBytes = readFileSync(modulePath);
+if (!moduleBytes.includes(Buffer.from("yaagl_fsr_api"))) {
+  throw new Error("native cache is missing the FSR sidecar API export");
+}
+if (!moduleBytes.includes(Buffer.from("yaagl_fsr_fg_api"))) {
+  throw new Error("native cache is missing the FSR frame-generation sidecar API export");
+}
 const diagnosticControls = [
+  "YAAGL_FSR_LOG",
   "YAAGL_METALFX_DIAGNOSTICS",
   "YAAGL_METALFX_LOG",
   "YAAGL_METALFX_EXPOSURE_SCALE_FIX",
@@ -127,6 +153,9 @@ for (const control of diagnosticControls) {
   if (!moduleBytes.includes(Buffer.from(control))) {
     throw new Error(`native cache is missing production diagnostic control: ${control}`);
   }
+}
+if (moduleBytes.includes(Buffer.from("YAAGL_METALFX_RENDER_PRESET"))) {
+  throw new Error("native cache still contains the removed render-size override");
 }
 const environmentControls = [
   "YAAGL_NATIVE_PSO_CACHE_PROBE",

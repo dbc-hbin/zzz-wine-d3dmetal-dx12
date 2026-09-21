@@ -98,6 +98,20 @@ v1.0.3은 설치 프로그램만 수정합니다. 동봉된 macOS 26 Wine 아카
 - 중복 셰이더 생성을 막고 디바이스 수명 동안 Metal 파이프라인 상태 객체(PSO)를 재사용합니다.
 - 사전 캐시 웜업(Warmup) 구조로 쾌적한 전투 환경을 제공합니다.
 
+#### MetalFX 프레임 보간을 포함한 FSR → MetalFX 비공개 실행본
+
+FSR 번역기 개발 프로필은 AMD Radeon RX 9070(`0x1002:0x7550`)을 노출하고 canonical upscaler와 frame-generation DLL을 builtin으로 override합니다. 업스케일링은 기존 FSR API → MetalFX 경로를 유지합니다. 실제 command-buffer mode와 Apple 지원 predicate가 허용할 때 frame-generation effect `0x20000`만 MetalFX frame interpolation으로 번역하며, swapchain effect `0x30000`, 명시적인 native version 선택 및 미지원 조건은 원본 AMD 구현으로 전달합니다. 원본 loader는 변경하지 않습니다.
+
+```bash
+python3 scripts/stage-runtime.py --wine-source <seed-wine> --wine-dest <private-wine> \
+  --patched-d3dmetal <검증된-patched-D3DMetal> --build-dir <private-build> --play --fsr-translator
+python3 scripts/stage-runtime.py --verify-runtime <private-wine> --current-sources
+```
+
+스테이징은 설치된 원본 `amd_fidelityfx_framegeneration_dx12.dll`을 수정하지 않고 읽어 고정 SHA-256, x86-64 PE 아키텍처와 5개 export를 검증한 뒤, 비-canonical private 이름 `amd_fidelityfx_framegeneration_dx12_native.dll`로 읽기 전용 복사합니다. proxy는 그 sibling의 정확한 절대 경로만 로드하므로 canonical 재귀 로드를 막습니다. manifest에는 원본 provenance와 서명된 산출물 hash가 기록됩니다. `WINEDLLOVERRIDES`는 canonical upscaler 및 frame-generation builtin만 선택하고 loader나 이름을 바꾼 native fallback은 override하지 않습니다.
+
+모든 Mac에서 temporal scaling은 시스템 기본 MetalFX 모델을 사용합니다. 비공개 BBR 강제, BBR fallback 정책 및 V4 모델 override는 사용하지 않습니다. FSR API adapter는 고정된 provider의 null-output query 성공 no-op 동작을 따르며, raw COM tear-off 포인터 비교가 아니라 `ID3D12Device::GetAdapterLuid`로 논리 D3D12 device를 식별합니다. command list와 모든 resource는 같은 adapter LUID를 보고해야 합니다. 이는 현재 단일-adapter 실행본 검증이며 실제 multi-adapter 하드웨어 검증은 아닙니다. 이 번역기는 AMD FSR4 신경망이 아니라 MetalFX를 실행합니다. Ultra Performance에서 요청 출력이 MetalFX temporal 최대 3배를 초과할 때만 caller의 출력 texture는 유지하고 단일 배율 `s = min(device 최대 배율, 출력 너비 / 입력 너비, 출력 높이 / 입력 높이)`을 구하고 MetalFX 크기를 `floor(입력 너비 × s)` × `floor(입력 높이 × s)`로 계산해 중앙 배치하며 남는 여백을 검게 지웁니다(홀수 나머지 1픽셀은 반대쪽 여백에 둡니다). 이 계산은 1080p·1440p·4K·홀수 크기 출력과 실행 중 해상도 변경에 동적으로 적용됩니다. 예를 들어 1248×696 입력과 3840×2160 출력에서는 MetalFX를 3744×2088로 실행해 (48,36)에 배치하고 좌우 48픽셀·상하 36픽셀을 검은 여백으로 둡니다. 실제 물리 모니터 검증은 현재 4K 디스플레이에서만 수행했으며, 1080p·1440p·홀수 크기·해상도 전환은 GPU/backend 시나리오 검증이지 다른 물리 모니터 검증 주장이 아닙니다. 입력 크기 조절 UI나 추가 spatial scaling pass는 만들지 않으며, 3배 이하 dispatch는 기존 full-frame 경로를 그대로 사용합니다. 기존 배포·설치본은 자동으로 갱신되지 않으므로 반드시 별도 복사본만 stage·실행합니다.
+
 #### 실험적 NGX 노출 보정 및 진단
 
 `YAAGL_METALFX_EXPOSURE_SCALE_FIX=1`로 범위가 제한된 실험적 보정을 선택할 수 있습니다. 자동 노출과 호출자가 제공한 노출 텍스처가 모두 없는 수동 노출 HDR 평가에서, 유한한 양수 `DLSS.Exposure.Scale` 값이 `1`이 아니면 내부 1×1 `R16Float` 노출 텍스처로 표현합니다. 기존 노출 텍스처와 `DLSS.Pre.Exposure`는 변경하지 않으며, scale이 없거나 `0` 또는 `1`이면 건너뜁니다. 기본값은 꺼짐입니다. NVIDIA와 동등한 출력이나 jitter 수정을 주장하지 않습니다.
@@ -124,7 +138,7 @@ python3 scripts/stage-runtime.py \
   --check
 ```
 
-`--pristine-d3dmetal`에는 순정 GPTK 4.0b2 D3DMetal 바이너리를 지정해야 합니다. SHA-256이 `d3dmetal-pso-cache/layout.json`의 `source.sha256`(`f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3`, Mach-O UUID `674e662b-6b5c-3fd9-9a8a-f415609d2f6a`)과 다르면 도구가 거부하므로, 이미 패치된 바이너리나 설치된 런타임의 D3DMetal을 넘겨서는 안 됩니다. `--check`가 성공한 뒤 **같은 명령에서 `--check`만 제거**해 실행합니다. 이 과정은 x86_64 dylib를 빌드하고, 런타임 전체를 새 디렉터리로 복사하고, 해당 순정 바이너리에 기존 25-hook 패치 layout을 적용하고, 결과물을 설치·서명한 뒤 `wine.real` 실행 직전에 probe 환경을 설정하는 helper를 넣습니다. 설치된 Wine, 게임 파일, 원격 저장소는 수정하지 않으며, 지원하지 않는 wrapper나 지문이 맞지 않는 바이너리는 거부합니다. 이후 평소와 **동일한 prefix·게임 경로·인자**를 유지하고 Wine 경로만 `<wine-dest>/bin/wine`으로 바꿔 ZZZ를 실행합니다.
+`--pristine-d3dmetal`에는 순정 GPTK 4.0b2 D3DMetal 바이너리를 지정해야 합니다. SHA-256이 `d3dmetal-pso-cache/layout.json`의 `source.sha256`(`f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3`, Mach-O UUID `674e662b-6b5c-3fd9-9a8a-f415609d2f6a`)과 다르면 도구가 거부하므로, 이미 패치된 바이너리나 설치된 런타임의 D3DMetal을 넘겨서는 안 됩니다. `--check`가 성공한 뒤 **같은 명령에서 `--check`만 제거**해 실행합니다. 이 과정은 x86_64 dylib를 빌드하고, 런타임 전체를 새 디렉터리로 복사하고, 해당 순정 바이너리에 기존 29-hook 패치 layout을 적용하고, 결과물을 설치·서명한 뒤 `wine.real` 실행 직전에 probe 환경을 설정…
 
 게임에서 DLSS를 켜고 지연이 나타나는 NPC를 화면에 둔 뒤:
 
@@ -136,7 +150,7 @@ python3 scripts/probe-control.py "$PROBE_DIR" stop
 python3 scripts/analyze-probe.py "$PROBE_DIR/probe-<pid>-SESSION.jsonl"
 ```
 
-`ready-<pid>.json`은 MPL NGX 평가를 실제로 관측한 프로세스에만 생기며, 후보가 여러 개면 PID를 추측하지 말고 `--pid`로 지정합니다. 캡처는 device 전체를 대상으로 하고 실행 중 프레임이 느려질 수 있습니다. `capture requested`는 요청을 기록했다는 뜻일 뿐이므로 로그에 `capture_started`와 `capture_stopped`가 실제로 있는지 확인하고, `capture_unavailable`, `NO_NATIVE_ENCODE`, timeout 종료는 실패로 취급합니다. 8회는 device에서 관측한 presentation callback 수이지 확정된 `Present[N]` 개수가 아니므로 첫 1~2개와 마지막 불완전 구간은 버립니다. analyzer는 정확히 한 프로세스·한 실행의 로그에만 사용하고 `<log>.report.json`과 `<log>.report.encodes.csv`를 만듭니다. writer는 비동기이며 실행당 64MiB로 제한되므로, capacity 또는 overflow 경고가 있으면 그 로그는 불완전한 것으로 봅니다.
+`ready-<pid>.json`은 MPL NGX 평가를 실제로 관측한 프로세스에만 생기며, 후보가 여러 개면 PID를 추측하지 말고 `--pid`로 지정합니다. 캡처는 device 전체를 대상으로 하고 실행 중 프레임이 느려질 수 있습니다. `capture requested`는 요청을 기록했다는 뜻일 뿐이므로 로그에 `capture_started`와 `capture_stopped`가 실제로 있는지 확인하고, `capture_unavailable`, `NO_NATIVE_ENCODE`, timeout 종료는 실패로 취급합니다. 8회는 device에서 관측한 presentation callback 수이지 확정된 `Present[N]` 개수가 아니므로 첫 1~2개와 마지막 불완전 구간은 버립니다. analyzer는 정확히 한 프로세스·한 실행의 로그에만 사용하고 `<log>.…
 
 `.gputrace`를 Xcode로 열고 **`YAAGL.MFX` 그룹을 먼저** 찾습니다. 대응하는 JSON `encode_before`에서 실제 bound color/output/depth/motion 객체를 확인할 수 있습니다. 이어서 다음을 따라갑니다. **A**는 실제 MetalFX가 읽는 color, **B**는 실제 MetalFX 출력, **C**는 presentation에 사용한 drawable texture입니다. `YAAGL.PASS`는 attachment와 command buffer 연결 표식, `YAAGL.draw`는 후보 이름표 draw 표식입니다. 텍셀 자체는 JSON에 없으므로 native trace에서 해당 이벤트의 리소스 상태를 직접 비교합니다.
 
@@ -261,3 +275,8 @@ node --test scripts/test-dx12-launch-regression.mjs
 
 - Wine 소스 코드는 **GNU Lesser General Public License (LGPL v2.1+)**를 따릅니다.
 - D3DMetal 관련 인터페이스 및 설치 프로그램 코드는 본 저장소의 라이선스를 따릅니다.
+
+
+Wall time: 0.05 seconds
+
+[Some lines truncated to 768 bytes. Read artifact://4290 for full output]

@@ -1,4 +1,6 @@
 #import "ngx-hooks.hpp"
+#import "d3dmetal-transport.hpp"
+#import "d3dmetal-transport-legacy.hpp"
 #import "exposure.hpp"
 #import "temporal.hpp"
 #import "frame-probe.hpp"
@@ -305,6 +307,11 @@ void temporalScale(void* self, void* scaler, const void* desc) {
     gTemporalScale.load()(self, scaler, submitted);
 }
 void replay(void* replayer, const void* command) {
+    if (d3dmetal::isRecordedCommand(command)) {
+        if (!d3dmetal::replay(replayer, command))
+            [NSException raise:@"YaaglMetalFXReplayFailure" format:@"MetalFX command failed during Metal4 replay"];
+        return;
+    }
     // Install the observer FIRST. The optional older temporal wrapper is outer
     // and applies its setters before our inner encode observer reads them.
     frameprobe::ReplayScope frameProbe(command);
@@ -315,6 +322,11 @@ void replay(void* replayer, const void* command) {
     const int resultErrno = errno; logScaler("mpl-replay", "after", command, true); errno = resultErrno;
 }
 void encode(void* encoder, const void* command) {
+    if (d3dmetal::legacy::isRecordedCommand(command)) {
+        if (!d3dmetal::legacy::replay(encoder, command))
+            [NSException raise:@"YaaglMetalFXLegacyEncodeFailure" format:@"MetalFX command failed during legacy Metal encoding"];
+        return;
+    }
     const bool diagnostics = gEnabled.load(std::memory_order_relaxed);
     if (!diagnostics && !gExposureEnabled.load(std::memory_order_relaxed)) return gEncode.load()(encoder, command);
     exposure::LegacyEncodeScope scope(encoder, command);
@@ -395,7 +407,7 @@ std::array<std::uintptr_t, kHookCount> initializeHooks(const std::uint8_t* image
     temporal::initialize(gGetFloat, gGetUint, gGetInt, &temporalLog);
     frameprobe::initialize(gGetFloat, gGetUint, gGetInt, gGetResource);
     gEnabled.store(diagnostics, std::memory_order_release);
-    return {reinterpret_cast<std::uintptr_t>(&evaluateMPL), reinterpret_cast<std::uintptr_t>(&evaluateMTL), reinterpret_cast<std::uintptr_t>(&temporalScale), reinterpret_cast<std::uintptr_t>(&replay), reinterpret_cast<std::uintptr_t>(&encode), diagnostics || gExposureEnabled.load(std::memory_order_acquire) ? reinterpret_cast<std::uintptr_t>(&yaagl_legacy_gate) : originals[5], (diagnostics || temporal::enabled() || frameprobe::enabled()) ? reinterpret_cast<std::uintptr_t>(&yaagl_mpl_post_gate) : originals[6], diagnostics ? reinterpret_cast<std::uintptr_t>(&evaluateAPI) : originals[7]};
+    return {reinterpret_cast<std::uintptr_t>(&evaluateMPL), reinterpret_cast<std::uintptr_t>(&evaluateMTL), reinterpret_cast<std::uintptr_t>(&temporalScale), reinterpret_cast<std::uintptr_t>(&replay), reinterpret_cast<std::uintptr_t>(&encode), diagnostics || gExposureEnabled.load(std::memory_order_acquire) ? reinterpret_cast<std::uintptr_t>(&yaagl_legacy_gate) : originals[5], (diagnostics || temporal::enabled() || frameprobe::enabled()) ? reinterpret_cast<std::uintptr_t>(&yaagl_mpl_post_gate) : originals[6], diagnostics ? reinterpret_cast<std::uintptr_t>(&evaluateAPI) : originals[7], originals[8], originals[9], originals[10], originals[11]};
 }
 
 } // namespace yaagl::pso::ngx

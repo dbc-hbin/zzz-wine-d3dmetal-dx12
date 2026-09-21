@@ -1,5 +1,5 @@
 {
-  "formatVersion": 4,
+  "formatVersion": 7,
   "source": {
     "sha256": "f8640e6b0974277068821d44bd398dcc0f42cbb730d07f3afad97843e72a6ea3",
     "machUuid": "674e662b6b5c3fd99a8af415609d2f6a",
@@ -20,8 +20,8 @@
   },
   "constructorVerification": {
     "markerOffset": 4904624,
-    "markerHex": "594141474c50534f4341434845000000",
-    "description": "Constructor verifies this marker, Mach UUID, entry patches, gates, trampolines, dispatch slot ownership, and a null dispatch slot before publishing its table."
+    "markerHex": "594141474c50534f4341434845070000",
+    "description": "Version 7 pairs the 29-entry table with independent DX12 DLSS create, release and shutdown routing. Older sidecars cannot publish into this image. Constructor also verifies Mach UUID, entry patches, gates, trampolines, dispatch slot ownership, and a null dispatch slot."
   },
   "textCave": {
     "offset": 4904624,
@@ -63,6 +63,11 @@
     }
   ],
   "verificationSpans": [
+    {
+      "id": "NgxDLSSOptimalSettingsCall",
+      "offset": 699125,
+      "expectedHex": "e872990500"
+    },
     {
       "id": "ExtractCall1107d0",
       "offset": 1116112,
@@ -464,6 +469,54 @@
       "gateHex": "48833d98a607000074164c8b1d8fa6070041ffa3c0000000",
       "trampolineHex": "415741564154e98d54ceff",
       "dispatchFieldOffset": 192
+    },
+    {
+      "id": "NgxD3D12CreateFeature",
+      "entryOffset": 1648379,
+      "gateOffset": 4905792,
+      "trampolineOffset": 4905824,
+      "continuationOffset": 1648385,
+      "originalHex": "415741564154",
+      "entryPatchHex": "e940b4310090",
+      "gateHex": "48833d58a607000074164c8b1d4fa6070041ffa3c8000000",
+      "trampolineHex": "415741564154e9964bceff",
+      "dispatchFieldOffset": 200
+    },
+    {
+      "id": "NgxD3D12ReleaseFeature",
+      "entryOffset": 1651204,
+      "gateOffset": 4905856,
+      "trampolineOffset": 4905888,
+      "continuationOffset": 1651213,
+      "originalHex": "56574881eca8000000",
+      "entryPatchHex": "e977a9310090909090",
+      "gateHex": "48833d18a607000074164c8b1d0fa6070041ffa3d0000000",
+      "trampolineHex": "56574881eca8000000e95f56ceff",
+      "dispatchFieldOffset": 208
+    },
+    {
+      "id": "NgxD3D12Shutdown",
+      "entryOffset": 1646332,
+      "gateOffset": 4905920,
+      "trampolineOffset": 4905952,
+      "continuationOffset": 1646341,
+      "originalHex": "56574881eca8000000",
+      "entryPatchHex": "e9bfbc310090909090",
+      "gateHex": "48833dd8a507000074164c8b1dcfa5070041ffa3d8000000",
+      "trampolineHex": "56574881eca8000000e91743ceff",
+      "dispatchFieldOffset": 216
+    },
+    {
+      "id": "NgxD3D12Shutdown1",
+      "entryOffset": 1646564,
+      "gateOffset": 4905984,
+      "trampolineOffset": 4906016,
+      "continuationOffset": 1646573,
+      "originalHex": "56574881eca8000000",
+      "entryPatchHex": "e917bc310090909090",
+      "gateHex": "48833d98a507000074164c8b1d8fa5070041ffa3e0000000",
+      "trampolineHex": "56574881eca8000000e9bf43ceff",
+      "dispatchFieldOffset": 224
     }
   ]
 }

@@ -19,6 +19,8 @@
 #include <string>
 
 #include "cache.hpp"
+#include "fsr-translator.hpp"
+#include "fsr-framegeneration.hpp"
 #include "function-cache.hpp"
 #include "function-hooks.hpp"
 #include "key.hpp"
@@ -413,6 +415,8 @@ __attribute__((constructor)) void initialize() noexcept {
             base = reinterpret_cast<const std::uint8_t*>(header);
         }
         if (base == nullptr) return;
+        static_cast<void>(fsr::initialize(base));
+        static_cast<void>(fsr::framegeneration::initialize(base));
         static_cast<void>(warmPersistentCachesFromEnvironment());
         static_cast<void>(runtime());
         for (std::size_t index = 0; index < kHookCount; ++index) {
@@ -471,6 +475,10 @@ __attribute__((constructor)) void initialize() noexcept {
             ngxHooks[5],
             ngxHooks[6],
             ngxHooks[7],
+            ngxHooks[8],
+            ngxHooks[9],
+            ngxHooks[10],
+            ngxHooks[11],
         };
         auto& slot = *reinterpret_cast<std::uintptr_t*>(const_cast<std::uint8_t*>(base) + layout::kDataSlot);
         std::atomic_ref<std::uintptr_t>(slot).store(

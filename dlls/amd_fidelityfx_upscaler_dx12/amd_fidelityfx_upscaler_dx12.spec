@@ -1,0 +1,5 @@
+1 stdcall ffxConfigure(ptr ptr)
+2 stdcall ffxCreateContext(ptr ptr ptr)
+3 stdcall ffxDestroyContext(ptr ptr)
+4 stdcall ffxDispatch(ptr ptr)
+5 stdcall ffxQuery(ptr ptr)

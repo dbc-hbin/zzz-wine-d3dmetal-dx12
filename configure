@@ -1000,6 +1000,8 @@ enable_advpack
 enable_aero_msstyles
 enable_amsi
 enable_amstream
+enable_amd_fidelityfx_upscaler_dx12
+enable_amd_fidelityfx_framegeneration_dx12
 enable_apisetschema
 enable_apphelp
 enable_appwiz_cpl
@@ -22032,6 +22034,8 @@ wine_fn_config_makefile dlls/aero.msstyles enable_aero_msstyles
 wine_fn_config_makefile dlls/amsi enable_amsi
 wine_fn_config_makefile dlls/amstream enable_amstream
 wine_fn_config_makefile dlls/amstream/tests enable_tests
+wine_fn_config_makefile dlls/amd_fidelityfx_upscaler_dx12 enable_amd_fidelityfx_upscaler_dx12
+wine_fn_config_makefile dlls/amd_fidelityfx_framegeneration_dx12 enable_amd_fidelityfx_framegeneration_dx12
 wine_fn_config_makefile dlls/apisetschema enable_apisetschema
 wine_fn_config_makefile dlls/apphelp enable_apphelp
 wine_fn_config_makefile dlls/apphelp/tests enable_tests

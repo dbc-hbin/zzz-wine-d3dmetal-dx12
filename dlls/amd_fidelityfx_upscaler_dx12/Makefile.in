@@ -1,0 +1,6 @@
+MODULE = amd_fidelityfx_upscaler_dx12.dll
+UNIXLIB = amd_fidelityfx_upscaler_dx12.so
+
+SOURCES = \
+	main.c \
+	unixlib.c
