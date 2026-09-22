@@ -188,6 +188,8 @@ The [Yaagl PR #759](https://github.com/yaagl/yet-another-anime-game-launcher/pul
 
 ### v1.1.0 release assets
 
+v1.1.1 republishes the v1.1.0 runtime unchanged; only `ZZZWineDX12Installer.zip` differs. The runtime archive names below are therefore still used in the v1.1.1 release.
+
 |Asset|Contents|
 |---|---|
 |`ZZZWineDX12Installer.zip`|GUI installer and the full runtime archive below|

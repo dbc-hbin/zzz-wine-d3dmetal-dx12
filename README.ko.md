@@ -188,6 +188,8 @@ export WINE_RUNTIME_ID=11.17-zzz-dx12-tuned-stage-parallel-cache-warmup-cursor-r
 
 ### v1.1.0 릴리스 asset
 
+v1.1.1은 v1.1.0 런타임을 그대로 다시 게시하며 `ZZZWineDX12Installer.zip`만 변경됩니다. 따라서 아래 런타임 아카이브 이름이 v1.1.1 릴리스에서도 그대로 사용됩니다.
+
 |Asset|내용|
 |---|---|
 |`ZZZWineDX12Installer.zip`|GUI 설치 프로그램과 아래 full runtime 아카이브|
