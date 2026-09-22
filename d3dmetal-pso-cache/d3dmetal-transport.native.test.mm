@@ -109,7 +109,7 @@ struct SubmissionFixture {
     }
 };
 
-// Exact public-resource fixture already proven against ngx::GetInternalResource.
+// Exact public-resource fixture for D3DMetal's current resource transport.
 // The fake D3D12Texture uses D3DMetal's real current-texture virtual ABI, while
 // keeping a non-zero baseline refcount so a mismatch cannot silently delete it.
 struct ResourceFixture {

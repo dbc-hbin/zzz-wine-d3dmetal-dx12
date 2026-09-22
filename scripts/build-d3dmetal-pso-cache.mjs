@@ -17,17 +17,12 @@ const sourceDirectory = resolve(root, "d3dmetal-pso-cache");
 const sourcePaths = [
   "d3dmetal-pso-cache/cache.hpp", "d3dmetal-pso-cache/cache.mm",
   "d3dmetal-pso-cache/function-cache.hpp", "d3dmetal-pso-cache/function-cache.mm",
-  "d3dmetal-pso-cache/exposure.hpp", "d3dmetal-pso-cache/exposure.mm",
-  "d3dmetal-pso-cache/temporal.hpp", "d3dmetal-pso-cache/temporal.mm",
-  "d3dmetal-pso-cache/temporal-contract.hpp",
-  "d3dmetal-pso-cache/frame-probe.hpp", "d3dmetal-pso-cache/frame-probe.mm",
-  "d3dmetal-pso-cache/frame-probe-core.hpp",
   "d3dmetal-pso-cache/function-hooks.hpp", "d3dmetal-pso-cache/function-hooks.mm",
   "d3dmetal-pso-cache/key.hpp", "d3dmetal-pso-cache/key.mm",
-  "d3dmetal-pso-cache/ngx-hooks.hpp", "d3dmetal-pso-cache/ngx-hooks.mm",
   "d3dmetal-pso-cache/metalfx-contract.hpp",
   "d3dmetal-pso-cache/metalfx-backend.hpp", "d3dmetal-pso-cache/metalfx-backend.mm",
   "d3dmetal-pso-cache/d3dmetal-transport.hpp", "d3dmetal-pso-cache/d3dmetal-transport.mm",
+  "d3dmetal-pso-cache/d3dmetal-replay-hooks.hpp", "d3dmetal-pso-cache/d3dmetal-replay-hooks.mm",
   "d3dmetal-pso-cache/d3dmetal-transport-legacy.hpp", "d3dmetal-pso-cache/d3dmetal-transport-legacy.mm",
   "d3dmetal-pso-cache/fsr-contract.hpp", "d3dmetal-pso-cache/fsr-contract.cpp",
   "d3dmetal-pso-cache/fsr-translator.hpp", "d3dmetal-pso-cache/fsr-translator.mm",
@@ -55,12 +50,9 @@ const hookNames = [
   "CompileComputeStages", "CompileGraphicsStages",
   "CreateComputeStageKey", "CreateGraphicsStageKey",
   "ExtractFunctions", "LoadGraphicsFunctions",
-  "NgxEvaluateMPL", "NgxEvaluateMTL", "TemporalScaleMPL",
   "ReplayTemporalScaleMPL", "EncodeTemporalScaleMTL",
-  "LegacyRecordComplete", "MplRecordComplete", "NgxD3D12EvaluateFeature",
-  "NgxD3D12CreateFeature", "NgxD3D12ReleaseFeature", "NgxD3D12Shutdown", "NgxD3D12Shutdown1",
 ];
-if (layout.formatVersion !== 7 || layout.hooks.length !== hookNames.length ||
+if (layout.formatVersion !== 9 || layout.hooks.length !== hookNames.length ||
     layout.hooks.some((hook, index) => hook.id !== hookNames[index] || hook.dispatchFieldOffset !== index * 8)) {
   throw new Error("unsupported native PSO dispatch layout");
 }
@@ -125,7 +117,7 @@ const compileArgs = [
   ...(testControls ? ["-DYAAGL_NATIVE_PSO_CACHE_TEST_CONTROLS=1"] : []),
   "-dynamiclib", "-pthread", "-framework", "Foundation", "-framework", "Metal", "-framework", "QuartzCore", "-framework", "MetalFX",
   "-I", sourceDirectory, "-I", outputDirectory,
-  ...["cache.mm", "exposure.mm", "temporal.mm", "frame-probe.mm", "function-cache.mm", "function-hooks.mm", "key.mm", "ngx-hooks.mm", "metalfx-backend.mm", "d3dmetal-transport.mm", "d3dmetal-transport-legacy.mm", "fsr-contract.cpp", "fsr-translator.mm", "fsr-framegeneration.mm", "persistent-cache.mm", "rt-key.mm", "stage-cache.mm", "bridge.mm"].map((file) => resolve(sourceDirectory, file)),
+  ...["cache.mm", "function-cache.mm", "function-hooks.mm", "key.mm", "metalfx-backend.mm", "d3dmetal-transport.mm", "d3dmetal-transport-legacy.mm", "d3dmetal-replay-hooks.mm", "fsr-contract.cpp", "fsr-translator.mm", "fsr-framegeneration.mm", "persistent-cache.mm", "rt-key.mm", "stage-cache.mm", "bridge.mm"].map((file) => resolve(sourceDirectory, file)),
   "-Wl,-install_name,@rpath/libYaaglNativePsoCache.dylib", "-o", modulePath,
 ];
 const compiled = spawnSync(compiler, compileArgs, { cwd: root, stdio: "inherit" });
@@ -139,16 +131,7 @@ if (!moduleBytes.includes(Buffer.from("yaagl_fsr_api"))) {
 if (!moduleBytes.includes(Buffer.from("yaagl_fsr_fg_api"))) {
   throw new Error("native cache is missing the FSR frame-generation sidecar API export");
 }
-const diagnosticControls = [
-  "YAAGL_FSR_LOG",
-  "YAAGL_METALFX_DIAGNOSTICS",
-  "YAAGL_METALFX_LOG",
-  "YAAGL_METALFX_EXPOSURE_SCALE_FIX",
-  "YAAGL_METALFX_FRAME_PROBE",
-  "YAAGL_METALFX_PROBE_DIR",
-  "YAAGL_METALFX_PROBE_RESET_HISTORY",
-  "YAAGL_METALFX_TEMPORAL",
-];
+const diagnosticControls = ["YAAGL_FSR_LOG"];
 for (const control of diagnosticControls) {
   if (!moduleBytes.includes(Buffer.from(control))) {
     throw new Error(`native cache is missing production diagnostic control: ${control}`);

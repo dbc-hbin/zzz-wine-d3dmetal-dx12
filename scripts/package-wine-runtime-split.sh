@@ -1,5 +1,5 @@
 #!/bin/sh
-# Split the immutable v1.0.5 tuned Wine runtime into a core archive and a
+# Split the verified v1.1.0 FSR-only Wine runtime into a core archive and a
 # D3DMetal overlay. The input tree is only read; no Wine/GPTK build occurs.
 #
 #   package-wine-runtime-split.sh [SOURCE_WINE_ROOT] [OUTPUT_DIR]
@@ -9,12 +9,12 @@
 set -eu
 
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-source_root=${1:-"$repo_dir/build/wine-tuned/package/stage/wine"}
-output_dir=${2:-"$repo_dir/build/wine-tuned/package"}
+source_root=${1:-"$repo_dir/build/release-v1.1.0/wine"}
+output_dir=${2:-"$repo_dir/build/release-v1.1.0/split"}
 
 core_name=wine-11.17-zzz-core-macos26.tar.xz
-backend_name=d3dmetal-gptk4b2-zzz-v1.0.5.tar.xz
-backend_version=4.0.0-beta.2.zzz.1
+backend_name=d3dmetal-gptk4b2-zzz-v1.1.0.tar.xz
+backend_version=4.0.0-beta.2.zzz.2
 source_runtime_name=wine-11.17-zzz-dx12-gptk4b2-macos26
 
 backend_nodes='external/D3DMetal.framework
@@ -31,18 +31,6 @@ wine/x86_64-unix/d3d12.so
 wine/x86_64-unix/dxgi.so
 wine/x86_64-unix/nvapi64.so'
 
-# These pin the already-produced v1.0.5 bits. This script only separates them.
-expected_hashes='external/libd3dshared.dylib d932330841e77682d47688641e0ac17049a2aff498deafac88921983dc16eedb
-external/D3DMetal.framework/Versions/A/D3DMetal f48e88faddabb17c786f3fe0ef21dd71070ca3bf29816f82bb7c66631011191b
-external/D3DMetal.framework/Versions/A/Resources/libmetalirconverter.dylib 5c5619ef17a7d62e84db0a7f5181d746623b47364379271fd5827e6bd961ba34
-external/D3DMetal.framework/Versions/A/Resources/libYaaglNativePsoCache.dylib 9f8ed9b86853f56017fa3594f1dfd4173fdabe3e34557178f432533f562208b8
-wine/x86_64-windows/d3d10.dll 14c84a364a1260497f0a5117ef8efd6e228764ab139a67af1127e8bd013c48c7
-wine/x86_64-windows/d3d10core.dll dc87193d17e1b48bd40acc295ee180031089740c87e2d4ddc36325773a3c2e27
-wine/x86_64-windows/d3d11.dll 303b2bb41efa30c890e2e93d39c3d3c565c8557e069eee832f2cb8a37bd4ec26
-wine/x86_64-windows/d3d12.dll 1b7a02cb37ec6b484e2aaa76b5ec9cbb47e63aeec29dbe087d5d1589a3347cfb
-wine/x86_64-windows/dxgi.dll 522a8b37216afb09e614489d88a74118076f4d7e08d2b289df6a6eb6f3e817af
-wine/x86_64-windows/nvapi64.dll 05eedf19e75c6b4c0dce918577aa6ca3fe5da79d04e42145cf66f498fad3556a'
-
 fail() {
   printf '%s\n' "package-wine-runtime-split: $*" >&2
   exit 1
@@ -54,11 +42,6 @@ require_path() {
 
 sha256_file() {
   shasum -a 256 "$1" | awk '{print $1}'
-}
-
-require_hash() {
-  actual=$(sha256_file "$1")
-  [ "$actual" = "$2" ] || fail "unexpected immutable v1.0.5 bytes: $1"
 }
 
 [ "$#" -le 2 ] || fail "usage: $0 [SOURCE_WINE_ROOT] [OUTPUT_DIR]"
@@ -74,40 +57,85 @@ done
 require_path "$source_root/yaagl-wine-p3-provenance.json"
 require_path "$source_root/yaagl-wine-runtime-files.json"
 require_path "$source_root/yaagl-wine-p3-graphics-artifacts.json"
+require_path "$source_root/zzz-frame-probe-stage.json"
 for node in $backend_nodes; do
   require_path "$source_root/lib/$node"
 done
 
-# Verify the source identity and all non-system backend roots before copying.
+# The stage verifier pins every signed graphics/FSR artifact, rejects DLSS
+# leftovers, and proves the embedded native/FSR build manifests still match
+# the current sources before any payload is copied.
+/usr/bin/python3 "$repo_dir/scripts/stage-runtime.py" \
+  --verify-runtime "$source_root" --current-sources
+
+# Verify the public identity and the complete monolithic runtime inventory.
 /usr/bin/python3 - "$source_root" "$source_runtime_name" <<'PY'
+import hashlib
 import json
+import os
 import pathlib
+import stat
 import sys
 
 root = pathlib.Path(sys.argv[1])
 expected_name = sys.argv[2]
 with (root / "yaagl-wine-p3-provenance.json").open(encoding="utf-8") as stream:
     provenance = json.load(stream)
+with (root / "yaagl-wine-runtime-files.json").open(encoding="utf-8") as stream:
+    manifest = json.load(stream)
 if provenance.get("name") != expected_name:
-    raise SystemExit("source provenance does not identify the immutable v1.0.5 runtime")
+    raise SystemExit("source provenance does not identify the v1.1.0 runtime")
 if provenance.get("wineVersion") != "wine-11.17":
     raise SystemExit("source provenance does not identify Wine 11.17")
 if provenance.get("graphicsBackend") != "d3dmetal":
     raise SystemExit("source provenance does not identify the D3DMetal backend")
+if manifest.get("schemaVersion") != 1:
+    raise SystemExit("unsupported complete runtime inventory schema")
+if manifest.get("runtimeId") != provenance.get("runtimeId"):
+    raise SystemExit("runtime inventory and provenance IDs differ")
+if manifest.get("wineVersion") != provenance.get("wineVersion"):
+    raise SystemExit("runtime inventory and provenance Wine versions differ")
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+def inventory():
+    entries = []
+    for directory, names, files in os.walk(root, topdown=True, followlinks=False):
+        names.sort()
+        files.sort()
+        for name in [*names, *files]:
+            path = pathlib.Path(directory) / name
+            relative = path.relative_to(root).as_posix()
+            if relative == "yaagl-wine-runtime-files.json":
+                continue
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                entries.append({"path": relative, "type": "symlink", "target": os.readlink(path)})
+            elif stat.S_ISREG(mode):
+                entries.append({"path": relative, "type": "file", "size": path.stat().st_size,
+                                "sha256": sha256(path)})
+    entries.sort(key=lambda entry: entry["path"])
+    return entries
+
+if manifest.get("entries") != inventory():
+    raise SystemExit("complete runtime inventory does not match final staged bytes")
 PY
-while IFS=' ' read -r relative expected; do
-  [ -n "$relative" ] || continue
-  require_hash "$source_root/lib/$relative" "$expected"
-done <<EOF
-$expected_hashes
-EOF
 for unix_name in d3d10 d3d11 d3d12 dxgi nvapi64; do
   [ "$(readlink "$source_root/lib/wine/x86_64-unix/$unix_name.so")" = "../../external/libd3dshared.dylib" ] \
     || fail "unexpected bridge symlink: $unix_name.so"
 done
 codesign --verify --strict --verbose=2 \
   "$source_root/lib/external/D3DMetal.framework" \
-  "$source_root/lib/external/libd3dshared.dylib"
+  "$source_root/lib/external/D3DMetal.framework/Versions/A/Resources/libYaaglNativePsoCache.dylib" \
+  "$source_root/lib/external/D3DMetal.framework/Versions/A/Resources/libmetalirconverter.dylib" \
+  "$source_root/lib/external/libd3dshared.dylib" \
+  "$source_root/lib/wine/x86_64-unix/amd_fidelityfx_upscaler_dx12.so" \
+  "$source_root/lib/wine/x86_64-unix/amd_fidelityfx_framegeneration_dx12.so"
 
 work_root=$(mktemp -d "${TMPDIR:-/tmp}/yaagl-wine-split.XXXXXX")
 smoke_prefix=
@@ -133,9 +161,9 @@ for node in $backend_nodes; do
   mv "$core_root/lib/$node" "$backend_root/$node"
 done
 
-# The old manifests describe a monolithic runtime and must not be presented as
-# a core-only inventory. Source provenance and the human-readable record stay
-# intact; the two split manifests below inventory only their own payloads.
+# The final manifests describe a monolithic runtime and must not be presented
+# as a core-only inventory. Provenance and the stage record stay intact; the
+# two split manifests below inventory only their own payloads.
 rm -f \
   "$core_root/yaagl-wine-runtime-files.json" \
   "$core_root/yaagl-wine-p3-graphics-artifacts.json"
@@ -378,7 +406,11 @@ PY
 
 codesign --verify --strict --verbose=2 \
   "$reassembled_root/wine/lib/external/D3DMetal.framework" \
-  "$reassembled_root/wine/lib/external/libd3dshared.dylib"
+  "$reassembled_root/wine/lib/external/D3DMetal.framework/Versions/A/Resources/libYaaglNativePsoCache.dylib" \
+  "$reassembled_root/wine/lib/external/D3DMetal.framework/Versions/A/Resources/libmetalirconverter.dylib" \
+  "$reassembled_root/wine/lib/external/libd3dshared.dylib" \
+  "$reassembled_root/wine/lib/wine/x86_64-unix/amd_fidelityfx_upscaler_dx12.so" \
+  "$reassembled_root/wine/lib/wine/x86_64-unix/amd_fidelityfx_framegeneration_dx12.so"
 
 # The core intentionally cannot be loaded alone. Exercise only the reassembled
 # runtime in a private prefix, then terminate that prefix's wineserver.

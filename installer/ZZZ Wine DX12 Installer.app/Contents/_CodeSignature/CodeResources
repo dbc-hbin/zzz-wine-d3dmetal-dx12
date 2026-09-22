@@ -6,47 +6,7 @@
 	<dict>
 		<key>Resources/AsarTransform.js</key>
 		<data>
-		nmGNB7Zu4L6rM6twH1w/x5KZiHs=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/D3DMetal</key>
-		<data>
-		508KHxz0f+Zd+OGkcnkkzrrExj0=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/Info.plist</key>
-		<data>
-		A9Q7l49yron6kGlxxheMisxKOHs=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/LICENSE</key>
-		<data>
-		1s+LZYFe//ikbe8+xMdMVwM9Jfo=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/default.metallib</key>
-		<data>
-		nxM8R4J5Yu3qhfUj/W/8ki/Pf+E=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libdxccontainer.dylib</key>
-		<data>
-		1LG/bo0GywPAhMVfHw05euUOcJ8=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libdxcompiler.dylib</key>
-		<data>
-		2iUSTnbN+TYEWlzMV4f8Sn+Nthw=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libdxilconv.dylib</key>
-		<data>
-		AQ1EwIk9vFOT+EIRLHRoHR+oy7k=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libmetalirconverter.dylib</key>
-		<data>
-		ECFUn4YQXw7YgfGr9dIn5Bf9gtE=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/version.plist</key>
-		<data>
-		cmGa4zzrejkuru19HRPOC+Bm+U4=
-		</data>
-		<key>Resources/D3DMetal.framework/Versions/A/_CodeSignature/CodeResources</key>
-		<data>
-		0qA7omxl1yRSEvpkxgb6SW6PXoA=
+		kMwGgAegHPytFtcm1RcdtFJtlQg=
 		</data>
 		<key>Resources/TypeScript-LICENSE.txt</key>
 		<data>
@@ -58,7 +18,7 @@
 		</data>
 		<key>Resources/Wine 11.17 ZZZ DX12 (GPTK4.0b2 macOS26).tar.xz</key>
 		<data>
-		Po+xMAmZl0QMGnDQB6L7Clqse5M=
+		IlKQUibNE8LXS+K4k2JnNk+c0qs=
 		</data>
 		<key>Resources/typescript.js</key>
 		<data>
@@ -66,7 +26,7 @@
 		</data>
 		<key>Resources/zzz-wine-register</key>
 		<data>
-		uvHnGKt3FJ4mAlokGtXIzBYZUe8=
+		ibdpi9TNjW2AMxHhNc0Mt9UHcDs=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -75,93 +35,8 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			1Z3LZ1kfO3fN/RSTI6Gov/jrawcozgSLi9wPJU+OUOI=
+			O3TxozElEYR/93+GoWgQHI4meCi0PMSDlDjBIVG5eSQ=
 			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/D3DMetal</key>
-		<dict>
-			<key>symlink</key>
-			<string>Versions/Current/D3DMetal</string>
-		</dict>
-		<key>Resources/D3DMetal.framework/Resources</key>
-		<dict>
-			<key>symlink</key>
-			<string>Versions/Current/Resources</string>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/D3DMetal</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			9bVt8bj+izZN2VMGUaN2nIrtlIvTQ747RRBgTVA+K60=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/Info.plist</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			tM/WFS6/aLeo0gNpMQ4KsXi7QRlPWpYNSc0bWOwv2OA=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/LICENSE</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			VT0ANXc93RWQBF+P3DpMbq0x42M2chrsqEIeiO0cn4A=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/default.metallib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			Fhq6RXfQuUxplk9EGi8AzeD7TEjDswTyoLh6EJmnlvk=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libdxccontainer.dylib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			JGu7FRUJFbJUBYv2kwvgcL/6zSXWqOepMmV9y/77flM=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libdxcompiler.dylib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			V9yUIa9iw1s3Kt91NvB7Hiwg7zLcH0wWkwpC/BLtH9I=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libdxilconv.dylib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			VszVqXrCwA8Lipb766IHZqR3kePWUTSEzgKpI2z20+s=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/libmetalirconverter.dylib</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			dZdNSa1N0b3xerPNZmrnysQ+f3pXYCN2masz7NPTHa8=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/Resources/version.plist</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			hMoICxWVpaOvi2FJZKATCjCEaJW60ZpQjTpa4YO2djI=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/A/_CodeSignature/CodeResources</key>
-		<dict>
-			<key>hash2</key>
-			<data>
-			ogirSiv3+71uZs3Lbl26IYRc0g8PrLH/9IOZR+m+9WQ=
-			</data>
-		</dict>
-		<key>Resources/D3DMetal.framework/Versions/Current</key>
-		<dict>
-			<key>symlink</key>
-			<string>A</string>
 		</dict>
 		<key>Resources/TypeScript-LICENSE.txt</key>
 		<dict>
@@ -181,7 +56,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			1N7zfBjcEqngz1jgIGBEw40mC4LUNKRAYgscqUmMO98=
+			E9DGD3I0HlGEDwHUnUhmgCEC/ss9rMIDzKBNGW4Imu8=
 			</data>
 		</dict>
 		<key>Resources/typescript.js</key>
@@ -195,7 +70,7 @@
 		<dict>
 			<key>hash2</key>
 			<data>
-			QbXBuZRgD2ka3lC0r2W3c3V+0en8mCa1PeiYmbxuoMM=
+			Iseu6EEm+Gypxe+bR5SU15XorXbJa/hJ6bqkLmWNl8w=
 			</data>
 		</dict>
 	</dict>

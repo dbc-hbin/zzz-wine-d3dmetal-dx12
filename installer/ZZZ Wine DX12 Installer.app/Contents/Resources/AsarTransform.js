@@ -135,10 +135,22 @@
     return matches[0];
   }
 
-  function localInstallerChanges(sourceFile, targetId) {
+  function localInstallerChanges(sourceFile, targetId, protectedRuntimeIds) {
     var functionNode = installFunction(sourceFile);
     var bodyText = text(functionNode.body, sourceFile);
-    if (bodyText.includes("__yaaglD3MetalLocalArchive")) return [];
+    if (bodyText.includes("__yaaglD3MetalLocalArchive")) {
+      var markers = [];
+      visit(functionNode.body, function (node) {
+        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === "__yaaglD3MetalLocalArchive" && node.initializer) markers.push(node.initializer);
+      });
+      if (markers.length !== 1) throw new Error("could not unambiguously locate prior local Wine archive marker");
+      var wine = wineIdentifierFromDownload(findStreamingDownload(functionNode).download);
+      var protectedIds = JSON.stringify(protectedRuntimeIds);
+      var replacement = protectedIds + ".includes(" + wine + ".id)&&" + wine + ".remoteUrl.startsWith(\"file:\")";
+      var markerText = text(markers[0], sourceFile);
+      if (markerText.includes(protectedIds + ".includes(" + wine + ".id)") && markerText.includes(wine + ".remoteUrl.startsWith(\"file:\")")) return [];
+      return [{ start: markers[0].getStart(sourceFile), end: markers[0].end, replacement: replacement }];
+    }
 
     var streaming = findStreamingDownload(functionNode);
     var wine = wineIdentifierFromDownload(streaming.download);
@@ -173,8 +185,8 @@
     if (!compressed || !archive || !ts.isIdentifier(compressed.name) || !ts.isIdentifier(archive.name) || !compressed.initializer || !archive.initializer) throw new Error("Wine archive declarations have an unsupported shape");
 
     var marker = "__yaaglD3MetalLocalArchive";
-    var target = JSON.stringify(targetId);
-    var declarationReplacement = "let " + compressed.name.text + "=" + text(compressed.initializer, sourceFile) + "," + marker + "=" + wine + ".id===" + target + "&&" + wine + ".remoteUrl.startsWith(\"file:\")," + archive.name.text + "=" + marker + "?decodeURIComponent(new URL(" + wine + ".remoteUrl).pathname):" + text(archive.initializer, sourceFile);
+    var protectedIds = JSON.stringify(protectedRuntimeIds);
+    var declarationReplacement = "let " + compressed.name.text + "=" + text(compressed.initializer, sourceFile) + "," + marker + "=" + protectedIds + ".includes(" + wine + ".id)&&" + wine + ".remoteUrl.startsWith(\"file:\")," + archive.name.text + "=" + marker + "?decodeURIComponent(new URL(" + wine + ".remoteUrl).pathname):" + text(archive.initializer, sourceFile);
 
     var deletes = [];
     visit(functionNode.body, function (node) {
@@ -248,7 +260,7 @@
     return prior;
   }
 
-  function launchChanges(sourceFile, targetId) {
+  function launchChanges(sourceFile) {
     var matches = functionNodes(sourceFile).filter(function (candidate) {
       if (!candidate.body) return false;
       var bodyText = text(candidate.body, sourceFile);
@@ -281,8 +293,18 @@
       if (ts.isCallExpression(expression) && expression.arguments.length === 1 && stringLiteralValue(expression.arguments[0]) === "-use-d3d12" && propertyAccessName(expression.expression) === "push" && isIdentifierNamed(expression.expression.expression, argumentsName)) d3d12Statements.push(node);
     });
 
-    var target = JSON.stringify(targetId);
-    var d3d12Statement = wine + ".attributes.id===" + target + "&&" + wine + ".attributes.renderBackend===\"d3dmetal\"&&" + argumentsName + ".push(\"-use-d3d12\");";
+    var configBindings = [];
+    functionNode.parameters.forEach(function (parameter) {
+      if (!ts.isObjectBindingPattern(parameter.name)) return;
+      parameter.name.elements.forEach(function (element) {
+        var propertyName = element.propertyName ? staticPropertyName(element.propertyName) : staticPropertyName(element.name);
+        if (propertyName === "config" && ts.isIdentifier(element.name)) configBindings.push(element.name.text);
+      });
+    });
+    if (configBindings.length !== 1) throw new Error("could not unambiguously locate the game launch config");
+
+    var config = configBindings[0];
+    var d3d12Statement = config + ".useD3D12&&" + wine + ".attributes.supportsD3d12===true&&" + argumentsName + ".push(\"-use-d3d12\");";
     var changes = d3d12Statements.length ? [{
       start: d3d12Statements[0].getStart(sourceFile),
       end: d3d12Statements[0].end,
@@ -316,6 +338,33 @@
       });
     }
     return changes;
+  }
+
+  function precomposedD3DMetalChanges(sourceFile) {
+    var matches = [];
+    visit(sourceFile, function (node) {
+      if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken) return;
+      var condition = text(node.left, sourceFile);
+      var action = text(node.right, sourceFile);
+      if (!condition.includes(".attributes.renderBackend") || !condition.includes("d3dmetal") || !action.includes("yield*")) return;
+      var wines = [];
+      visit(node.left, function (candidate) {
+        if (!ts.isPropertyAccessExpression(candidate) || candidate.name.text !== "renderBackend") return;
+        var attributes = candidate.expression;
+        if (ts.isPropertyAccessExpression(attributes) && attributes.name.text === "attributes") wines.push(attributes.expression);
+      });
+      if (wines.length !== 1) throw new Error("could not identify the D3DMetal overlay Wine object");
+      matches.push({ condition: node.left, wine: text(wines[0], sourceFile) });
+    });
+    return matches.flatMap(function (match) {
+      var condition = text(match.condition, sourceFile);
+      if (condition.includes(".attributes.precomposedD3DMetal")) return [];
+      return [{
+        start: match.condition.getStart(sourceFile),
+        end: match.condition.end,
+        replacement: "(" + condition + ")&&" + match.wine + ".attributes.precomposedD3DMetal!==true"
+      }];
+    });
   }
 
   function findUpdaterCommitMove(sourceFile) {
@@ -463,12 +512,18 @@
       if (!options || typeof options !== "object" || typeof options.registrationHelperPath !== "string" || !options.registrationHelperPath || typeof options.archivePath !== "string" || !options.archivePath) {
         throw new Error("transform options must include registrationHelperPath and archivePath strings");
       }
+      var protectedRuntimeIds = options.protectedRuntimeIds;
+      if (!Array.isArray(protectedRuntimeIds) || !protectedRuntimeIds.length || protectedRuntimeIds.some(function (id) { return typeof id !== "string" || !id; })) {
+        throw new Error("transform options must include a non-empty protectedRuntimeIds string array");
+      }
+      if (new Set(protectedRuntimeIds).size !== protectedRuntimeIds.length) throw new Error("protectedRuntimeIds must not contain duplicates");
+      if (!protectedRuntimeIds.includes(targetId)) throw new Error("protectedRuntimeIds must include targetId");
       var sourceFile = parse(source);
       var record = JSON.stringify({
         id: targetId,
         displayName: displayName,
         remoteUrl: archiveURL,
-        attributes: { id: targetId, renderBackend: "d3dmetal", winePath: "wine" }
+        attributes: { id: targetId, renderBackend: "d3dmetal", winePath: "wine", supportsD3d12: true }
       });
       var catalog = findTargetDistribution(sourceFile, targetId);
       var changes = [];
@@ -479,8 +534,9 @@
         var array = catalogArray(catalog.distributions);
         changes.push({ start: array.end - 1, end: array.end - 1, replacement: "," + record });
       }
-      changes = changes.concat(localInstallerChanges(sourceFile, targetId));
-      changes = changes.concat(launchChanges(sourceFile, targetId));
+      changes = changes.concat(localInstallerChanges(sourceFile, targetId, protectedRuntimeIds));
+      changes = changes.concat(precomposedD3DMetalChanges(sourceFile));
+      changes = changes.concat(launchChanges(sourceFile));
       changes = changes.concat(updaterChanges(sourceFile, options));
       var output = applyChanges(source, changes);
       var outputFile = parse(output);

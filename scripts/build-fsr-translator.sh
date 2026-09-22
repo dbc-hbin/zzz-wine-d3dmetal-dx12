@@ -52,7 +52,8 @@ if [ ! -f "$build/config.status" ]; then
 fi
 ( cd "$build" && ./config.status Makefile )
 
-make -C "$build" -j"$jobs" "dlls/$upscaler/all" "dlls/$framegeneration/all"
+MACOSX_DEPLOYMENT_TARGET=14.0 make -C "$build" -j"$jobs" \
+  "dlls/$upscaler/all" "dlls/$framegeneration/all"
 
 mkdir -p "$out/lib/wine/x86_64-windows" "$out/lib/wine/x86_64-unix"
 for module in "$upscaler" "$framegeneration"; do

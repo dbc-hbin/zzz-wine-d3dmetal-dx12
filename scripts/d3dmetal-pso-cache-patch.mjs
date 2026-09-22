@@ -15,21 +15,21 @@ const layoutText = await readFile(
 );
 const layoutSha256 = createHash("sha256").update(layoutText).digest("hex");
 const expectedLayoutSha256 =
-  "d45561431b4a7158ebeffb5ae5000eaf027db76fe0d1938fe031fdc8f6c30cf4";
+  "6aab5a48f9a56f115d6c738e418b47746369f20eb1607ef4ed3c7b41efc94395";
 if (layoutSha256 !== expectedLayoutSha256) {
   throw new Error(
     `layout corruption: expected SHA-256 ${expectedLayoutSha256}, got ${layoutSha256}`
   );
 }
 const layout = JSON.parse(layoutText);
-if (layout.formatVersion !== 7) {
+if (layout.formatVersion !== 9) {
   throw new Error(`unsupported layout format ${layout.formatVersion}`);
 }
 
 export const D3DMETAL_PSO_CACHE_PATCHED_SHA256 =
-  "5166edd83a490a6e45fbef323ef239032403df7c98ee53c9a02243bc3f8235ff";
+  "33358a28095d8abe0b4b515674c68a427cfe0d0eceee52664056669be95c97f9";
 export const D3DMETAL_PSO_CACHE_PATCHED_PAYLOAD_SHA256 =
-  "109f61811b395a521daf9d3057ff86f65d88a48be546cdd76ea7939e7771b3c7";
+  "081f9ff08665a89f343ce93b0e88534f9548403653fce2584cdc2ad67f7ac27a";
 
 const LC_SEGMENT_64 = 0x19;
 const LC_UUID = 0x1b;

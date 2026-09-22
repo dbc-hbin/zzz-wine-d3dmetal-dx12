@@ -5,7 +5,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
 RUNTIME_ARCHIVE="Wine 11.17 ZZZ DX12 (GPTK4.0b2 macOS26).tar.xz"
-RUNTIME_ARCHIVE_SOURCE="${RUNTIME_ARCHIVE_SOURCE:-$DIR/../build/wine-tuned/package/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz}"
+RUNTIME_ARCHIVE_SOURCE="${RUNTIME_ARCHIVE_SOURCE:-$DIR/../build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz}"
 if [ ! -f "$RUNTIME_ARCHIVE_SOURCE" ]; then
     echo "Missing macOS 26 runtime archive: $RUNTIME_ARCHIVE_SOURCE" >&2
     exit 1
@@ -58,10 +58,6 @@ done
 echo "==> Bundling macOS 26 runtime archive into App Resources..."
 cp "$RUNTIME_ARCHIVE_SOURCE" "$APP_NAME/Contents/Resources/$RUNTIME_ARCHIVE"
 
-if [ -d "$DIR/../external/D3DMetal.framework" ]; then
-    echo "==> Bundling D3DMetal.framework into App Resources..."
-    ditto "$DIR/../external/D3DMetal.framework" "$APP_NAME/Contents/Resources/D3DMetal.framework"
-fi
 
 cat << 'PLIST' > "$APP_NAME/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -81,9 +77,9 @@ cat << 'PLIST' > "$APP_NAME/Contents/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.5</string>
+    <string>1.1.0</string>
     <key>CFBundleVersion</key>
-    <string>1.0.5</string>
+    <string>1.1.0</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
     <key>NSHighResolutionCapable</key>

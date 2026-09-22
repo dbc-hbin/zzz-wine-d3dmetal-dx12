@@ -24,8 +24,8 @@
 #include "function-cache.hpp"
 #include "function-hooks.hpp"
 #include "key.hpp"
+#include "d3dmetal-replay-hooks.hpp"
 #include "layout.hpp"
-#include "ngx-hooks.hpp"
 #include "persistent-cache.hpp"
 #include "rt-key.hpp"
 #include "stage-cache.hpp"
@@ -440,12 +440,12 @@ __attribute__((constructor)) void initialize() noexcept {
         const StageHookEntryPoints stage = initializeStageHooks(base, stageOriginals);
         if (stage.compileComputeStages == nullptr || stage.compileGraphicsStages == nullptr ||
             stage.createComputeStageKey == nullptr || stage.createGraphicsStageKey == nullptr) return;
-        std::array<std::uintptr_t, ngx::kHookCount> ngxOriginals{};
-        for (std::size_t index = 0; index < ngx::kHookCount; ++index) {
-            ngxOriginals[index] = originalFunctions[17 + index];
-        }
-        const auto ngxHooks = ngx::initializeHooks(base, ngxOriginals);
-        for (const auto hook : ngxHooks) {
+        const std::array<std::uintptr_t, d3dmetal::kReplayHookCount> replayOriginals = {
+            originalFunctions[17],
+            originalFunctions[18],
+        };
+        const auto replayHooks = d3dmetal::initializeReplayHooks(replayOriginals);
+        for (const auto hook : replayHooks) {
             if (hook == 0) return;
         }
         functionImageBase = reinterpret_cast<std::uintptr_t>(base);
@@ -467,18 +467,8 @@ __attribute__((constructor)) void initialize() noexcept {
             reinterpret_cast<std::uintptr_t>(stage.createGraphicsStageKey),
             reinterpret_cast<std::uintptr_t>(&extractFunctions),
             reinterpret_cast<std::uintptr_t>(&loadGraphicsFunctions),
-            ngxHooks[0],
-            ngxHooks[1],
-            ngxHooks[2],
-            ngxHooks[3],
-            ngxHooks[4],
-            ngxHooks[5],
-            ngxHooks[6],
-            ngxHooks[7],
-            ngxHooks[8],
-            ngxHooks[9],
-            ngxHooks[10],
-            ngxHooks[11],
+            replayHooks[0],
+            replayHooks[1],
         };
         auto& slot = *reinterpret_cast<std::uintptr_t*>(const_cast<std::uint8_t*>(base) + layout::kDataSlot);
         std::atomic_ref<std::uintptr_t>(slot).store(

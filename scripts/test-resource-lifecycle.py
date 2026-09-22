@@ -90,7 +90,7 @@ def extract_runtime_archive(archive_path, destination):
     return wine
 
 
-def run_suite(stock_bytes, repo_root):
+def run_suite(stock_bytes, repo_root, previous_runtime_archive=None):
     print("====================================================================")
     print("Yaagl Wine DX12 Installer - Resource Lifecycle Regression Test Suite")
     print("====================================================================")
@@ -128,9 +128,11 @@ def run_suite(stock_bytes, repo_root):
         legacy_bak.write_bytes(legacy_marker)
         os.utime(legacy_bak, (500, 500))
 
-        # Seed prior Wine runtime in support so Restore has a real prior wine to restore
+        # Seed a real prior Wine runtime when supplied so installation exercises an actual upgrade.
+        # Falling back to the bundled runtime preserves the standalone lifecycle contract.
         prior_wine = support / "wine"
-        subprocess.run(["/usr/bin/tar", "-xJf", str(runtime_archive_source), "-C", str(support)], check=True)
+        prior_runtime_source = previous_runtime_archive or runtime_archive_source
+        subprocess.run(["/usr/bin/tar", "-xJf", str(prior_runtime_source), "-C", str(support)], check=True)
         assert prior_wine.is_dir(), "Seeded wine directory failed extraction"
         marker_file = prior_wine / "PRIOR_WINE_MARKER.txt"
         marker_file.write_text("PRIOR_WINE_VERSION_FOR_RESTORE_TEST")
@@ -430,6 +432,7 @@ def run_suite(stock_bytes, repo_root):
 def main():
     parser = argparse.ArgumentParser(description="Yaagl Wine DX12 Resource Lifecycle Regression Tests")
     parser.add_argument("--stock-resource", required=True, help="Path to stock Yaagl resources.neu fixture (REQUIRED)")
+    parser.add_argument("--previous-runtime", help="Optional prior release archive used for a real upgrade scenario")
     parser.add_argument("--repo", help="Repository root path", default=str(pathlib.Path.cwd()))
     args = parser.parse_args()
 
@@ -440,7 +443,12 @@ def main():
 
     stock_bytes = stock_path.read_bytes()
     repo_root = pathlib.Path(args.repo).resolve()
-    run_suite(stock_bytes, repo_root)
+    previous_runtime = pathlib.Path(args.previous_runtime).resolve() if args.previous_runtime else None
+    if previous_runtime is not None and not previous_runtime.is_file():
+        print(f"Error: --previous-runtime archive does not exist: {previous_runtime}", file=sys.stderr)
+        sys.exit(1)
+
+    run_suite(stock_bytes, repo_root, previous_runtime)
 
 if __name__ == '__main__':
     main()

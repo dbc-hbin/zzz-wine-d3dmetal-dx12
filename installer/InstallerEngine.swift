@@ -16,7 +16,7 @@ public class InstallerEngine: ObservableObject {
     public static var releaseDownloadUrl: String {
         let archiveName = RuntimePackage.releaseArchiveName
         let encoded = archiveName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? archiveName
-        return "https://github.com/dbc-hbin/zzz-wine-d3dmetal-dx12/releases/download/v1.0.2/\(encoded)"
+        return "https://github.com/dbc-hbin/zzz-wine-d3dmetal-dx12/releases/download/v1.1.0/\(encoded)"
     }
 
     @Published public var appPath: String = defaultAppPath
