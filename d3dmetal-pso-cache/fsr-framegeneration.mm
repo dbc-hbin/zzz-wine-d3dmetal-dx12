@@ -3,6 +3,7 @@
 #include "d3dmetal-transport-legacy.hpp"
 #include "../include/yaagl_fsr_fg_bridge.h"
 #include "third-party/fidelityfx/Kits/FidelityFX/api/include/ffx_api_types.h"
+#include "fsr-kernels.inc"
 
 #import <Foundation/Foundation.h>
 #import <Metal/Metal.h>
@@ -14,6 +15,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 #include <new>
@@ -36,11 +38,40 @@ constexpr std::uint32_t Parameter = 6;
 std::atomic<bool> ready{false};
 std::atomic<std::uint64_t> nextContext{1};
 std::atomic<unsigned> errorCount{0};
+std::atomic<bool> firstEncodeLogged{false};
 std::mutex registryMutex;
+std::mutex logMutex;
+FILE* fsrLog = nullptr;
 
-void logError(const char* text) noexcept {
-    if (errorCount.fetch_add(1, std::memory_order_relaxed) < 120)
-        std::fprintf(stderr, "yaagl-fsr-framegeneration: %s\n", text);
+void logFailure(std::uint32_t operation, const char* stage, std::uint32_t result,
+                std::uint32_t flags = 0, std::uint32_t width = 0,
+                std::uint32_t height = 0, float cameraNear = 0,
+                float cameraFar = 0, float fov = 0, float scale = 0) noexcept {
+    if (errorCount.fetch_add(1, std::memory_order_relaxed) >= 120) return;
+    std::fprintf(stderr,
+        "yaagl-fsr-framegeneration: operation=%u stage=%s result=%u flags=0x%x "
+        "input=%ux%u camera_near=%.9g camera_far=%.9g fov=%.9g scale=%.9g\n",
+        operation, stage, result, flags, width, height, cameraNear, cameraFar, fov, scale);
+}
+
+void logFirstEncode(Mode mode, std::uint32_t flags, std::uint32_t width,
+                    std::uint32_t height, float nearPlane, float farPlane,
+                    float fov, float scale) noexcept {
+    if (!fsrLog || firstEncodeLogged.exchange(true, std::memory_order_relaxed)) return;
+    std::array<char, 32> farPlaneText{};
+    if (std::isfinite(farPlane))
+        std::snprintf(farPlaneText.data(), farPlaneText.size(), "%.9g", farPlane);
+    else
+        std::snprintf(farPlaneText.data(), farPlaneText.size(), "null");
+    std::lock_guard lock(logMutex);
+    std::fprintf(fsrLog,
+        "{\"schema\":1,\"component\":\"fsr-framegeneration\","
+        "\"event\":\"first_encode\",\"mode\":\"%s\",\"flags\":%u,"
+        "\"input\":[%u,%u],\"nearPlane\":%.9g,\"farPlane\":%s,"
+        "\"fovRadians\":%.9g,\"viewSpaceToMeters\":%.9g}\n",
+        mode == Mode::Metal4 ? "metal4" : "legacy", flags, width, height,
+        nearPlane, farPlaneText.data(), fov, scale);
+    std::fflush(fsrLog);
 }
 
 template<class R, class... A>
@@ -125,7 +156,7 @@ struct Command {
 };
 
 struct Resources {
-    std::array<transport::MetalResource, 2> values{};
+    std::array<transport::MetalResource, 3> values{};
     ~Resources() {
         for (auto& value : values) transport::releaseResource(value);
     }
@@ -173,6 +204,22 @@ Object privateTexture(id<MTLDevice> device, MTLPixelFormat format,
     return result;
 }
 
+Object makePipeline(id<MTLDevice> device, NSString* name) {
+    NSError* error = nil;
+    NSString* source = [NSString stringWithUTF8String:kFsrKernelsSource];
+    id<MTLLibrary> library = [device newLibraryWithSource:source options:nil error:&error];
+    if (!library) return {};
+    id<MTLFunction> function = [library newFunctionWithName:name];
+    [library release];
+    if (!function) return {};
+    id<MTLComputePipelineState> pipeline =
+        [device newComputePipelineStateWithFunction:function error:&error];
+    [function release];
+    Object result(pipeline);
+    [pipeline release];
+    return result;
+}
+
 struct Configuration {
     Mode mode = Mode::Legacy;
     Object device;
@@ -180,10 +227,19 @@ struct Configuration {
     Object descriptor;
     Object factory;
     MTLPixelFormat color = MTLPixelFormatInvalid;
+    MTLPixelFormat ui = MTLPixelFormatInvalid;
+    MTLPixelFormat sourceColor = MTLPixelFormatInvalid;
+    MTLPixelFormat sourceUi = MTLPixelFormatInvalid;
+    std::uint32_t transfer = 0;
+    bool cameraPresent = false;
     MTLPixelFormat depth = MTLPixelFormatInvalid;
-    MTLPixelFormat motion = MTLPixelFormatInvalid;
+    MTLPixelFormat motion = MTLPixelFormatRG16Float;
     NSUInteger width = 0, height = 0, outputWidth = 0, outputHeight = 0;
-    MTLTextureUsage colorUsage = 0, depthUsage = 0, motionUsage = 0, outputUsage = 0;
+    MTLTextureUsage colorUsage = 0, uiUsage = 0, depthUsage = 0, motionUsage = 0, outputUsage = 0;
+    Object decodePipeline;
+    Object depthPipeline;
+    Object motionPipeline;
+    Object encodePipeline;
 
     Object makeInterpolator() const {
         if (@available(macOS 26.0, *)) {
@@ -205,10 +261,17 @@ struct Snapshot {
     yaagl_fsr_fg_prepare_packet parameters{};
     Object depth;
     Object motion;
+    NSUInteger depthWidth = 0;
+    NSUInteger depthHeight = 0;
+    NSUInteger motionWidth = 0;
+    NSUInteger motionHeight = 0;
+    bool hasPreviousJitter = false;
+    float previousJitterX = 0;
+    float previousJitterY = 0;
 };
 
 struct State {
-    std::shared_ptr<Configuration> configuration;
+    std::vector<std::shared_ptr<Configuration>> configurations;
     std::mutex mutex;
     std::mutex executionMutex;
     std::shared_ptr<void> device;
@@ -221,6 +284,12 @@ struct State {
     std::unordered_map<std::uint64_t, std::shared_ptr<Snapshot>> frames;
     Object history;
     std::shared_ptr<Configuration> historyConfiguration;
+    yaagl_fsr_fg_dispatch_packet historyDispatch{};
+    std::uint64_t historyFrame = 0;
+    bool hasPreparedJitter = false;
+    std::uint64_t preparedFrame = 0;
+    float preparedJitterX = 0;
+    float preparedJitterY = 0;
 };
 
 std::unordered_map<std::uint64_t, std::shared_ptr<State>> contexts;
@@ -245,7 +314,8 @@ bool sameConfiguration(const Configuration& a, const Configuration& b);
 std::shared_ptr<Configuration> configure(
     State& state, const Command& command,
     const yaagl_fsr_fg_prepare_packet& packet,
-    id<MTLTexture> depth, id<MTLTexture> motion) {
+    id<MTLTexture> depth, MTLPixelFormat sourceColor, MTLPixelFormat sourceUi,
+    NSUInteger outputWidth, NSUInteger outputHeight, std::uint32_t transfer) {
     if (@available(macOS 26.0, *)) {
         auto result = std::make_shared<Configuration>();
         result->mode = command.value.kind == transport::CommandListKind::mpl
@@ -254,15 +324,21 @@ std::shared_ptr<Configuration> configure(
         if (!supported(device, result->mode, command.value.compiler)) return {};
         result->device = Object(device);
         result->compiler = Object((id)command.value.compiler);
-        result->color = colorFormat(state.creation.backbuffer_format);
+        result->color = MTLPixelFormatRGBA16Float;
+        result->ui = sourceUi == MTLPixelFormatInvalid ? MTLPixelFormatInvalid : MTLPixelFormatRGBA16Float;
+        result->sourceColor = sourceColor;
+        result->sourceUi = sourceUi;
+        result->transfer = transfer;
+        result->cameraPresent = packet.camera_info_present != 0;
         result->depth = depth.pixelFormat;
-        result->motion = motion.pixelFormat;
-        result->width = packet.render_width;
-        result->height = packet.render_height;
-        result->outputWidth = state.creation.display_width;
-        result->outputHeight = state.creation.display_height;
-        if (state.configuration && sameConfiguration(*result, *state.configuration))
-            return state.configuration;
+        result->motion = MTLPixelFormatRG16Float;
+        // MetalFX consumes color, depth, and motion in one origin-zero active domain.
+        result->width = outputWidth;
+        result->height = outputHeight;
+        result->outputWidth = outputWidth;
+        result->outputHeight = outputHeight;
+        for (const auto& cached : state.configurations)
+            if (sameConfiguration(*result, *cached)) return cached;
 
         MTLFXFrameInterpolatorDescriptor* descriptor =
             [[MTLFXFrameInterpolatorDescriptor alloc] init];
@@ -272,7 +348,7 @@ std::shared_ptr<Configuration> configure(
         descriptor.outputTextureFormat = result->color;
         descriptor.depthTextureFormat = result->depth;
         descriptor.motionTextureFormat = result->motion;
-        descriptor.uiTextureFormat = MTLPixelFormatInvalid;
+        descriptor.uiTextureFormat = result->ui;
         descriptor.inputWidth = result->width;
         descriptor.inputHeight = result->height;
         descriptor.outputWidth = result->outputWidth;
@@ -285,42 +361,57 @@ std::shared_ptr<Configuration> configure(
         if (!result->factory) return {};
         auto interpolator = (id<MTLFXFrameInterpolatorBase>)result->factory.get();
         result->colorUsage = interpolator.colorTextureUsage;
+        result->uiUsage = interpolator.uiTextureUsage;
         result->depthUsage = interpolator.depthTextureUsage;
         result->motionUsage = interpolator.motionTextureUsage;
         result->outputUsage = interpolator.outputTextureUsage;
-        state.configuration = result;
+        result->decodePipeline = makePipeline(device, @"yaagl_fg_decode_crop");
+        result->depthPipeline = makePipeline(device, @"yaagl_fg_resample_depth");
+        result->motionPipeline = makePipeline(device, @"yaagl_fg_normalize_motion");
+        result->encodePipeline = makePipeline(device, @"yaagl_fg_encode_scatter");
+        if (!result->decodePipeline || !result->depthPipeline || !result->motionPipeline ||
+            !result->encodePipeline)
+            return {};
+        constexpr std::size_t configurationCacheLimit = 8;
+        if (state.configurations.size() == configurationCacheLimit)
+            state.configurations.erase(state.configurations.begin());
+        state.configurations.push_back(result);
         return result;
     }
     return {};
 }
 
+bool mapOne(Resources& resources, unsigned index, const State& state,
+            const Command& command, std::uint64_t address, bool output,
+            NSUInteger width, NSUInteger height) {
+    if (!address || index >= resources.values.size()) return false;
+    void* resource = pointer(address);
+    if (!matches(resource, true, state.luid)) return false;
+    transport::legacy::ResourceMetadata metadata{};
+    if (!transport::legacy::queryResourceMetadata(resource, metadata) ||
+        (output && !metadata.allowsUnorderedAccess()) ||
+        !transport::mapResource(resource, resources.values[index]))
+        return false;
+    const auto& view = resources.values[index].view;
+    return view.mipCount == 1 && view.sliceCount == 1 && view.planes == 1 &&
+           textureValid((id<MTLTexture>)resources.values[index].texture,
+                        (id<MTLDevice>)command.value.device, width, height);
+}
+
+id<MTLTexture> rootTexture(id<MTLTexture> texture) {
+    while (texture.parentTexture) texture = texture.parentTexture;
+    return texture;
+}
+
 bool mapPair(Resources& resources, const State& state, const Command& command,
              std::uint64_t first, std::uint64_t second, bool output,
              NSUInteger width, NSUInteger height) {
-    if (!first || !second || first == second) return false;
-    const std::uint64_t addresses[2] = {first, second};
-    for (unsigned i = 0; i != 2; ++i) {
-        void* resource = pointer(addresses[i]);
-        if (!matches(resource, true, state.luid)) return false;
-        transport::legacy::ResourceMetadata metadata{};
-        if (!transport::legacy::queryResourceMetadata(resource, metadata) ||
-            (output && i == 1 && !metadata.allowsUnorderedAccess()) ||
-            !transport::mapResource(resource, resources.values[i]))
-            return false;
-        const auto& view = resources.values[i].view;
-        if (view.mipCount != 1 || view.sliceCount != 1 || view.planes != 1)
-            return false;
-        if (!textureValid((id<MTLTexture>)resources.values[i].texture,
-                          (id<MTLDevice>)command.value.device, width, height))
-            return false;
-    }
-    auto a = (id<MTLTexture>)resources.values[0].texture;
-    auto b = (id<MTLTexture>)resources.values[1].texture;
-    id<MTLTexture> rootA = a;
-    id<MTLTexture> rootB = b;
-    while (rootA.parentTexture) rootA = rootA.parentTexture;
-    while (rootB.parentTexture) rootB = rootB.parentTexture;
-    return rootA != rootB;
+    if (!first || !second || first == second ||
+        !mapOne(resources, 0, state, command, first, false, width, height) ||
+        !mapOne(resources, 1, state, command, second, output, width, height))
+        return false;
+    return rootTexture((id<MTLTexture>)resources.values[0].texture) !=
+           rootTexture((id<MTLTexture>)resources.values[1].texture);
 }
 
 /* D3D12_RESOURCE_BARRIER, including the eight-byte aligned transition union. */
@@ -338,16 +429,18 @@ static_assert(sizeof(Barrier) == 32);
 bool record(void* list, Command& command, const Resources& resources,
             const std::shared_ptr<const PreparedFrame>& prepared,
             std::uint64_t context, std::uint64_t frame,
-            const std::array<std::uint64_t, 2>& addresses,
-            const std::array<std::uint32_t, 2>& states, bool generate) {
-    std::array<transport::ResourceUse, 2> uses{{
+            const std::array<std::uint64_t, 3>& addresses,
+            const std::array<std::uint32_t, 3>& states, unsigned resourceCount,
+            bool generate) {
+    std::array<transport::ResourceUse, 3> uses{{
         {&resources.values[0], transport::ResourceAccess::read},
         {&resources.values[1], generate ? transport::ResourceAccess::write
-                                      : transport::ResourceAccess::read}
+                                      : transport::ResourceAccess::read},
+        {&resources.values[2], transport::ResourceAccess::read}
     }};
-    std::array<Barrier, 2> barriers{};
+    std::array<Barrier, 3> barriers{};
     unsigned count = 0;
-    for (unsigned i = 0; i != 2; ++i) {
+    for (unsigned i = 0; i != resourceCount; ++i) {
         const std::uint32_t target = generate && i == 1 ? 0x8u : 0x40u;
         if (states[i] == target) continue;
         auto& barrier = barriers[count++];
@@ -360,7 +453,7 @@ bool record(void* list, Command& command, const Resources& resources,
     auto transition = reinterpret_cast<ResourceBarrier>(
         (*static_cast<void***>(list))[26]);
     if (count) transition(list, count, barriers.data());
-    transport::RecordRequest request{prepared, uses.data(), uses.size(), context, frame};
+    transport::RecordRequest request{prepared, uses.data(), resourceCount, context, frame};
     bool result = command.value.kind == transport::CommandListKind::legacy
         ? transport::legacy::record(command.value, request)
         : transport::record(command.value, request);
@@ -370,24 +463,87 @@ bool record(void* list, Command& command, const Resources& resources,
     return result;
 }
 
-bool validParameters(const yaagl_fsr_fg_prepare_packet& p) {
+struct CameraPlanes {
+    float nearPlane;
+    float farPlane;
+};
+
+bool normalizeCameraPlanes(const yaagl_fsr_fg_prepare_packet& p,
+                           std::uint32_t createFlags, CameraPlanes& planes) noexcept {
+    if (!std::isfinite(p.camera_near) || p.camera_near <= 0) return false;
+    if (createFlags & YAAGL_FSR_FG_DEPTH_INFINITE) {
+        planes = {p.camera_near, INFINITY};
+        return true;
+    }
+    if (!std::isfinite(p.camera_far) || p.camera_far <= 0 ||
+        p.camera_far == p.camera_near)
+        return false;
+    planes = {std::min(p.camera_near, p.camera_far),
+              std::max(p.camera_near, p.camera_far)};
+    return true;
+}
+
+bool validParameters(const yaagl_fsr_fg_prepare_packet& p, std::uint32_t createFlags) {
+    CameraPlanes planes{};
     if (!p.render_width || !p.render_height ||
         !std::isfinite(p.jitter_x) || !std::isfinite(p.jitter_y) ||
         !std::isfinite(p.motion_scale_x) || !std::isfinite(p.motion_scale_y) ||
         !std::isfinite(p.frame_time_delta_ms) || p.frame_time_delta_ms <= 0 ||
-        !std::isfinite(p.camera_near) || p.camera_near <= 0 ||
-        std::isnan(p.camera_far) || p.camera_far <= p.camera_near ||
+        !std::isfinite(p.view_space_to_meters) ||
+        !normalizeCameraPlanes(p, createFlags, planes) ||
         !std::isfinite(p.camera_fov_vertical_radians) ||
         p.camera_fov_vertical_radians <= 0 ||
-        p.camera_fov_vertical_radians >= 3.14159265358979323846f ||
-        !std::isfinite(p.view_space_to_meters) || p.view_space_to_meters < 0)
+        p.camera_fov_vertical_radians >= 3.14159265358979323846f)
         return false;
-    for (unsigned i = 0; i != 3; ++i)
-        if (!std::isfinite(p.camera_position[i]) ||
-            !std::isfinite(p.camera_up[i]) ||
-            !std::isfinite(p.camera_right[i]) ||
-            !std::isfinite(p.camera_forward[i]))
+    if (!p.camera_info_present) return true;
+    simd_float3 basis[3]{};
+    for (unsigned i = 0; i != 3; ++i) {
+        if (!std::isfinite(p.camera_position[i]) || !std::isfinite(p.camera_up[i]) ||
+            !std::isfinite(p.camera_right[i]) || !std::isfinite(p.camera_forward[i]))
             return false;
+        basis[0][i] = p.camera_up[i];
+        basis[1][i] = p.camera_right[i];
+        basis[2][i] = p.camera_forward[i];
+    }
+    constexpr float tolerance = 1.0e-3f;
+    for (const auto& axis : basis)
+        if (std::abs(simd_length(axis) - 1.0f) > tolerance) return false;
+    return std::abs(simd_dot(basis[0], basis[1])) <= tolerance &&
+           std::abs(simd_dot(basis[0], basis[2])) <= tolerance &&
+           std::abs(simd_dot(basis[1], basis[2])) <= tolerance;
+}
+
+bool validTransfer(const yaagl_fsr_fg_dispatch_packet& p) {
+    if (p.backbuffer_transfer_function > FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB ||
+        !std::isfinite(p.min_luminance) || !std::isfinite(p.max_luminance))
+        return false;
+    if (p.backbuffer_transfer_function == FFX_API_BACKBUFFER_TRANSFER_FUNCTION_PQ)
+        return p.max_luminance > 0;
+    if (p.backbuffer_transfer_function == FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB)
+        return p.max_luminance > p.min_luminance;
+    return true;
+}
+
+bool resolveRect(const yaagl_fsr_fg_dispatch_packet& p, NSUInteger displayWidth,
+                 NSUInteger displayHeight, std::int32_t& left, std::int32_t& top,
+                 NSUInteger& width, NSUInteger& height) {
+    const bool defaultRect = p.generation_rect_width == 0 &&
+                             p.generation_rect_height == 0;
+    if (defaultRect) {
+        if (p.generation_rect_left || p.generation_rect_top) return false;
+        left = top = 0; width = displayWidth; height = displayHeight;
+        return true;
+    }
+    if (p.generation_rect_left < 0 || p.generation_rect_top < 0 ||
+        p.generation_rect_width <= 0 || p.generation_rect_height <= 0)
+        return false;
+    const std::uint64_t right = std::uint64_t(p.generation_rect_left) +
+                                std::uint64_t(p.generation_rect_width);
+    const std::uint64_t bottom = std::uint64_t(p.generation_rect_top) +
+                                 std::uint64_t(p.generation_rect_height);
+    if (right > displayWidth || bottom > displayHeight) return false;
+    left = p.generation_rect_left; top = p.generation_rect_top;
+    width = p.generation_rect_width; height = p.generation_rect_height;
     return true;
 }
 
@@ -395,6 +551,8 @@ struct Copy {
     id<MTLTexture> source;
     id<MTLTexture> destination;
     NSUInteger width, height;
+    NSUInteger sourceX = 0, sourceY = 0;
+    NSUInteger destinationX = 0, destinationY = 0;
 };
 
 bool copyTextures(id buffer, id fence, Mode mode, const Copy* copies,
@@ -418,9 +576,11 @@ bool copyTextures(id buffer, id fence, Mode mode, const Copy* copies,
             sel_registerName("copyFromTexture:sourceSlice:sourceLevel:sourceOrigin:"
                              "sourceSize:toTexture:destinationSlice:destinationLevel:"
                              "destinationOrigin:"),
-            copy.source, NSUInteger(0), NSUInteger(0), MTLOriginMake(0, 0, 0),
+            copy.source, NSUInteger(0), NSUInteger(0),
+            MTLOriginMake(copy.sourceX, copy.sourceY, 0),
             MTLSizeMake(copy.width, copy.height, 1), copy.destination,
-            NSUInteger(0), NSUInteger(0), MTLOriginMake(0, 0, 0));
+            NSUInteger(0), NSUInteger(0),
+            MTLOriginMake(copy.destinationX, copy.destinationY, 0));
     }
     if (fence) {
         if (mode == Mode::Metal4)
@@ -435,11 +595,99 @@ bool copyTextures(id buffer, id fence, Mode mode, const Copy* copies,
     return false;
 }
 
+struct alignas(16) FgParams {
+    std::int32_t sourceOrigin[2];
+    std::uint32_t extent[2];
+    std::uint32_t sourceExtent[2];
+    std::uint32_t motionTargetExtent[2];
+    std::uint32_t outputExtent[2];
+    float motionScale[2];
+    float jitterCancellation[2];
+    float minLuminance;
+    float maxLuminance;
+    std::uint32_t transfer;
+};
+
+Object makeParameterBuffer(id<MTLDevice> device, const FgParams& params) {
+    id<MTLBuffer> buffer =
+        [device newBufferWithBytes:&params length:sizeof(params)
+                           options:MTLResourceStorageModeShared];
+    Object result(buffer);
+    [buffer release];
+    return result;
+}
+
+bool computePass(id buffer, id fence, Mode mode, id<MTLDevice> device,
+                 id<MTLComputePipelineState> pipeline, id<MTLTexture> source,
+                 id<MTLTexture> destination, id<MTLBuffer> parameterBuffer,
+                 const FgParams& params, std::vector<Object>& retained) {
+    if (!pipeline || !source || !destination || !parameterBuffer) return false;
+    if (@available(macOS 26.0, *)) {
+        if (mode == Mode::Metal4) {
+            MTL4ArgumentTableDescriptor* descriptor = [MTL4ArgumentTableDescriptor new];
+            descriptor.maxBufferBindCount = 1;
+            descriptor.maxTextureBindCount = 2;
+            descriptor.initializeBindings = YES;
+            NSError* error = nil;
+            id<MTL4ArgumentTable> table =
+                [device newArgumentTableWithDescriptor:descriptor error:&error];
+            [descriptor release];
+            if (!table) return false;
+            retained.emplace_back(table);
+            [table release];
+            [table setAddress:parameterBuffer.gpuAddress atIndex:0];
+            [table setTexture:source.gpuResourceID atIndex:0];
+            [table setTexture:destination.gpuResourceID atIndex:1];
+            id<MTL4ComputeCommandEncoder> encoder =
+                [(id<MTL4CommandBuffer>)buffer computeCommandEncoder];
+            if (!encoder) return false;
+            retained.emplace_back(encoder);
+            [encoder waitForFence:(id<MTLFence>)fence beforeEncoderStages:MTLStageDispatch];
+            [encoder setComputePipelineState:pipeline];
+            [encoder setArgumentTable:table];
+            [encoder dispatchThreads:MTLSizeMake(params.extent[0], params.extent[1], 1)
+                 threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+            [encoder updateFence:(id<MTLFence>)fence afterEncoderStages:MTLStageDispatch];
+            [encoder endEncoding];
+            return true;
+        }
+        id<MTLComputeCommandEncoder> encoder =
+            [(id<MTLCommandBuffer>)buffer computeCommandEncoder];
+        if (!encoder) return false;
+        retained.emplace_back(encoder);
+        [encoder waitForFence:(id<MTLFence>)fence];
+        [encoder setComputePipelineState:pipeline];
+        [encoder setTexture:source atIndex:0];
+        [encoder setTexture:destination atIndex:1];
+        [encoder setBuffer:parameterBuffer offset:0 atIndex:0];
+        [encoder dispatchThreads:MTLSizeMake(params.extent[0], params.extent[1], 1)
+             threadsPerThreadgroup:MTLSizeMake(8, 8, 1)];
+        [encoder updateFence:(id<MTLFence>)fence];
+        [encoder endEncoding];
+        return true;
+    }
+    return false;
+}
+
 bool sameConfiguration(const Configuration& a, const Configuration& b) {
     return a.device.get() == b.device.get() && a.mode == b.mode &&
-           a.color == b.color && a.depth == b.depth && a.motion == b.motion &&
+           a.color == b.color && a.ui == b.ui &&
+           a.sourceColor == b.sourceColor && a.sourceUi == b.sourceUi &&
+           a.transfer == b.transfer && a.cameraPresent == b.cameraPresent &&
+           a.depth == b.depth && a.motion == b.motion &&
            a.width == b.width && a.height == b.height &&
            a.outputWidth == b.outputWidth && a.outputHeight == b.outputHeight;
+}
+
+bool sameHistoryValues(const yaagl_fsr_fg_dispatch_packet& a,
+                       const yaagl_fsr_fg_dispatch_packet& b) {
+    return a.generation_rect_left == b.generation_rect_left &&
+           a.generation_rect_top == b.generation_rect_top &&
+           a.generation_rect_width == b.generation_rect_width &&
+           a.generation_rect_height == b.generation_rect_height &&
+           a.backbuffer_transfer_function == b.backbuffer_transfer_function &&
+           a.min_luminance == b.min_luminance &&
+           a.max_luminance == b.max_luminance;
 }
 
 } // namespace
@@ -451,6 +699,8 @@ struct PreparedFrame::Impl {
     std::shared_ptr<Snapshot> snapshot;
     Object first;
     Object second;
+    Object third;
+    yaagl_fsr_fg_dispatch_packet dispatch{};
     bool reset = false;
 };
 
@@ -507,19 +757,32 @@ bool PreparedFrame::encode(
     void* commandBuffer, void* fence,
     std::shared_ptr<const ExecutionLease>& lease) const noexcept {
     lease.reset();
+    auto fail = [&](const char* stage) noexcept {
+        if (impl_ && impl_->snapshot && impl_->state) {
+            const auto& p = impl_->snapshot->parameters;
+            logFailure(impl_->kind == Impl::Kind::Snapshot
+                           ? YAAGL_FSR_FG_PREPARE : YAAGL_FSR_FG_DISPATCH,
+                       stage, Runtime, impl_->state->creation.flags,
+                       p.render_width, p.render_height, p.camera_near, p.camera_far,
+                       p.camera_fov_vertical_radians, p.view_space_to_meters);
+        } else {
+            logFailure(YAAGL_FSR_FG_DISPATCH, stage, Runtime);
+        }
+        return false;
+    };
     try {
         @try {
             if (@available(macOS 26.0, *)) {
-                if (!commandBuffer || !impl_ || !impl_->snapshot) return false;
+                if (!commandBuffer || !impl_ || !impl_->snapshot) return fail("encode_arguments");
                 id buffer = (id)commandBuffer;
                 auto& configuration = *impl_->snapshot->configuration;
                 if (configuration.mode == Mode::Metal4) {
                     if (![buffer conformsToProtocol:@protocol(MTL4CommandBuffer)])
-                        return false;
+                        return fail("encode_command_buffer_type");
                 } else {
                     if (![buffer conformsToProtocol:@protocol(MTLCommandBuffer)] ||
                         [(id<MTLCommandBuffer>)buffer device] != configuration.device.get())
-                        return false;
+                        return fail("encode_command_buffer_device");
                 }
                 auto execution = std::make_shared<ExecutionLease::Impl>();
                 execution->prepared = impl_;
@@ -527,6 +790,7 @@ bool PreparedFrame::encode(
                 execution->objects.emplace_back((id)fence);
                 execution->objects.push_back(impl_->first);
                 execution->objects.push_back(impl_->second);
+                execution->objects.push_back(impl_->third);
                 execution->objects.push_back(impl_->snapshot->depth);
                 execution->objects.push_back(impl_->snapshot->motion);
 
@@ -537,106 +801,251 @@ bool PreparedFrame::encode(
 
                 std::lock_guard executionLock(impl_->state->executionMutex);
                 if (impl_->kind == Impl::Kind::Snapshot) {
-                    if (!execution->makeResident(buffer, configuration.mode)) return false;
-                    const Copy copies[] = {
+                    if (!execution->makeResident(buffer, configuration.mode))
+                        return fail("snapshot_residency");
+                    const std::array<Copy, 2> copies{{
                         {(id<MTLTexture>)impl_->first.get(),
                          (id<MTLTexture>)impl_->snapshot->depth.get(),
-                         configuration.width, configuration.height},
+                         impl_->snapshot->depthWidth, impl_->snapshot->depthHeight},
                         {(id<MTLTexture>)impl_->second.get(),
                          (id<MTLTexture>)impl_->snapshot->motion.get(),
-                         configuration.width, configuration.height}
-                    };
-                    return copyTextures(buffer, (id)fence, configuration.mode,
-                                        copies, 2, execution->objects);
+                         impl_->snapshot->motionWidth, impl_->snapshot->motionHeight}
+                    }};
+                    if (!copyTextures(buffer, (id)fence, configuration.mode,
+                                      copies.data(), copies.size(), execution->objects))
+                        return fail("snapshot_copy");
+                    return true;
                 }
 
                 Object interpolator = configuration.factory;
-                if (!interpolator) return false;
+                if (!interpolator) return fail("encode_interpolator");
                 auto effect = (id<MTLFXFrameInterpolatorBase>)interpolator.get();
                 auto device = (id<MTLDevice>)configuration.device.get();
                 Object current = privateTexture(device, configuration.color,
                     configuration.outputWidth, configuration.outputHeight,
-                    effect.colorTextureUsage);
+                    effect.colorTextureUsage | MTLTextureUsageShaderWrite);
+                Object ui = configuration.ui == MTLPixelFormatInvalid ? Object{} :
+                    privateTexture(device, configuration.ui, configuration.outputWidth,
+                                   configuration.outputHeight, effect.uiTextureUsage |
+                                   MTLTextureUsageShaderWrite);
+                Object normalizedDepth = privateTexture(device, configuration.depth,
+                    configuration.width, configuration.height,
+                    effect.depthTextureUsage | MTLTextureUsageShaderWrite);
+                Object normalizedMotion = privateTexture(device, configuration.motion,
+                    configuration.width, configuration.height,
+                    effect.motionTextureUsage | MTLTextureUsageShaderWrite);
                 Object output = privateTexture(device, configuration.color,
                     configuration.outputWidth, configuration.outputHeight,
-                    effect.outputTextureUsage);
-                if (!current || !output) return false;
+                    effect.outputTextureUsage | MTLTextureUsageShaderRead);
+                if (!current || !normalizedDepth || !normalizedMotion || !output ||
+                    (configuration.ui != MTLPixelFormatInvalid && !ui))
+                    return fail("encode_intermediate_textures");
 
                 auto& state = *impl_->state;
+                const std::uint64_t frame = impl_->dispatch.frame_id;
                 bool reset = impl_->reset || impl_->snapshot->parameters.reset ||
                     !state.history || !state.historyConfiguration ||
-                    !sameConfiguration(configuration, *state.historyConfiguration);
+                    !sameConfiguration(configuration, *state.historyConfiguration) ||
+                    !sameHistoryValues(impl_->dispatch, state.historyDispatch) ||
+                    state.historyFrame + 1 != frame;
                 Object previous = reset ? current : state.history;
                 execution->objects.push_back(interpolator);
                 execution->objects.push_back(current);
+                execution->objects.push_back(ui);
+                execution->objects.push_back(normalizedDepth);
+                execution->objects.push_back(normalizedMotion);
                 execution->objects.push_back(output);
                 execution->objects.push_back(previous);
-                if (!execution->makeResident(buffer, configuration.mode)) return false;
 
-                const Copy inputCopy{
-                    (id<MTLTexture>)impl_->first.get(), (id<MTLTexture>)current.get(),
-                    configuration.outputWidth, configuration.outputHeight};
-                if (!copyTextures(buffer, (id)fence, configuration.mode,
-                                  &inputCopy, 1, execution->objects))
-                    return false;
+                id<MTLTexture> present = (id<MTLTexture>)impl_->first.get();
+                id<MTLTexture> scene = impl_->third
+                    ? (id<MTLTexture>)impl_->third.get() : present;
+                auto rawView = [&](id<MTLTexture> texture) -> Object {
+                    MTLPixelFormat raw = texture.pixelFormat;
+                    if (raw == MTLPixelFormatRGBA8Unorm_sRGB) raw = MTLPixelFormatRGBA8Unorm;
+                    else if (raw == MTLPixelFormatBGRA8Unorm_sRGB) raw = MTLPixelFormatBGRA8Unorm;
+                    if (raw == texture.pixelFormat) return Object(texture);
+                    id<MTLTexture> view = [texture newTextureViewWithPixelFormat:raw];
+                    Object result(view);
+                    [view release];
+                    return result;
+                };
+                Object sceneView = rawView(scene);
+                Object presentView = rawView(present);
+                Object outputView = rawView((id<MTLTexture>)impl_->second.get());
+                if (!sceneView || !presentView || !outputView)
+                    return fail("encode_texture_views");
+                execution->objects.push_back(sceneView);
+                execution->objects.push_back(presentView);
+                execution->objects.push_back(outputView);
 
                 const auto& p = impl_->snapshot->parameters;
+                const auto& d = impl_->dispatch;
+                FgParams colorParams{};
+                colorParams.sourceOrigin[0] = d.generation_rect_left;
+                colorParams.sourceOrigin[1] = d.generation_rect_top;
+                colorParams.extent[0] = configuration.outputWidth;
+                colorParams.extent[1] = configuration.outputHeight;
+                colorParams.sourceExtent[0] = state.creation.display_width;
+                colorParams.sourceExtent[1] = state.creation.display_height;
+                colorParams.motionTargetExtent[0] = state.creation.display_width;
+                colorParams.motionTargetExtent[1] = state.creation.display_height;
+                colorParams.outputExtent[0] = configuration.outputWidth;
+                colorParams.outputExtent[1] = configuration.outputHeight;
+                colorParams.minLuminance = d.min_luminance;
+                colorParams.maxLuminance = d.max_luminance;
+                colorParams.transfer = d.backbuffer_transfer_function;
+
+                FgParams depthParams{};
+                depthParams.extent[0] = configuration.width;
+                depthParams.extent[1] = configuration.height;
+                depthParams.sourceExtent[0] = impl_->snapshot->depthWidth;
+                depthParams.sourceExtent[1] = impl_->snapshot->depthHeight;
+
+                FgParams motionParams{};
+                motionParams.extent[0] = configuration.width;
+                motionParams.extent[1] = configuration.height;
+                const bool displayMotion = (state.creation.flags &
+                    YAAGL_FSR_FG_DISPLAY_RESOLUTION_MOTION_VECTORS) != 0;
+                // The generation rectangle is a placement offset, not a source offset.
+                // Resample the complete origin-zero motion domain into the active rect.
+                motionParams.sourceExtent[0] = impl_->snapshot->motionWidth;
+                motionParams.sourceExtent[1] = impl_->snapshot->motionHeight;
+                motionParams.motionTargetExtent[0] = displayMotion
+                    ? state.creation.display_width : p.render_width;
+                motionParams.motionTargetExtent[1] = displayMotion
+                    ? state.creation.display_height : p.render_height;
+                motionParams.outputExtent[0] = configuration.outputWidth;
+                motionParams.outputExtent[1] = configuration.outputHeight;
+                motionParams.motionScale[0] = p.motion_scale_x;
+                motionParams.motionScale[1] = p.motion_scale_y;
+                if ((state.creation.flags & YAAGL_FSR_FG_MOTION_VECTORS_JITTERED) &&
+                    impl_->snapshot->hasPreviousJitter && !reset) {
+                    motionParams.jitterCancellation[0] =
+                        impl_->snapshot->previousJitterX - p.jitter_x;
+                    motionParams.jitterCancellation[1] =
+                        impl_->snapshot->previousJitterY - p.jitter_y;
+                }
+
+                Object colorParameters = makeParameterBuffer(device, colorParams);
+                Object depthParameters = makeParameterBuffer(device, depthParams);
+                Object motionParameters = makeParameterBuffer(device, motionParams);
+                if (!colorParameters || !depthParameters || !motionParameters)
+                    return fail("encode_parameter_buffers");
+                execution->objects.push_back(colorParameters);
+                execution->objects.push_back(depthParameters);
+                execution->objects.push_back(motionParameters);
+                // Metal4 GPU addresses must be admitted before the residency set commits.
+                if (!execution->makeResident(buffer, configuration.mode))
+                    return fail("encode_residency");
+
+                const Copy baseline{present, (id<MTLTexture>)impl_->second.get(),
+                    state.creation.display_width, state.creation.display_height};
+                if (!copyTextures(buffer, (id)fence, configuration.mode, &baseline, 1,
+                                  execution->objects))
+                    return fail("encode_baseline_copy");
+                if (!computePass(buffer, (id)fence, configuration.mode, device,
+                                 (id<MTLComputePipelineState>)configuration.decodePipeline.get(),
+                                 (id<MTLTexture>)sceneView.get(),
+                                 (id<MTLTexture>)current.get(),
+                                 (id<MTLBuffer>)colorParameters.get(), colorParams,
+                                 execution->objects))
+                    return fail("encode_scene_decode");
+                if (ui && !computePass(buffer, (id)fence, configuration.mode, device,
+                                      (id<MTLComputePipelineState>)configuration.decodePipeline.get(),
+                                      (id<MTLTexture>)presentView.get(),
+                                      (id<MTLTexture>)ui.get(),
+                                      (id<MTLBuffer>)colorParameters.get(), colorParams,
+                                      execution->objects))
+                    return fail("encode_ui_decode");
+                if (!computePass(buffer, (id)fence, configuration.mode, device,
+                                 (id<MTLComputePipelineState>)configuration.depthPipeline.get(),
+                                 (id<MTLTexture>)impl_->snapshot->depth.get(),
+                                 (id<MTLTexture>)normalizedDepth.get(),
+                                 (id<MTLBuffer>)depthParameters.get(), depthParams,
+                                 execution->objects))
+                    return fail("encode_depth_normalize");
+                if (!computePass(buffer, (id)fence, configuration.mode, device,
+                                 (id<MTLComputePipelineState>)configuration.motionPipeline.get(),
+                                 (id<MTLTexture>)impl_->snapshot->motion.get(),
+                                 (id<MTLTexture>)normalizedMotion.get(),
+                                 (id<MTLBuffer>)motionParameters.get(), motionParams,
+                                 execution->objects))
+                    return fail("encode_motion_normalize");
+
                 effect.colorTexture = (id<MTLTexture>)current.get();
                 effect.prevColorTexture = (id<MTLTexture>)previous.get();
-                effect.depthTexture = (id<MTLTexture>)impl_->snapshot->depth.get();
-                effect.motionTexture = (id<MTLTexture>)impl_->snapshot->motion.get();
+                effect.depthTexture = (id<MTLTexture>)normalizedDepth.get();
+                effect.motionTexture = (id<MTLTexture>)normalizedMotion.get();
+                effect.uiTexture = (id<MTLTexture>)ui.get();
+                effect.uiTextureComposited = bool(ui);
                 effect.outputTexture = (id<MTLTexture>)output.get();
                 effect.fence = (id<MTLFence>)fence;
                 effect.shouldResetHistory = reset;
                 effect.depthReversed =
                     (state.creation.flags & YAAGL_FSR_FG_DEPTH_INVERTED) != 0;
-                effect.motionVectorScaleX = p.motion_scale_x;
-                effect.motionVectorScaleY = p.motion_scale_y;
+                effect.motionVectorScaleX = 1.0f;
+                effect.motionVectorScaleY = 1.0f;
                 effect.jitterOffsetX = p.jitter_x;
                 effect.jitterOffsetY = p.jitter_y;
                 effect.deltaTime = p.frame_time_delta_ms * 0.001f;
-                const float worldScale = p.view_space_to_meters > 0 ? p.view_space_to_meters : 1.0f;
-                effect.nearPlane = p.camera_near * worldScale;
-                effect.farPlane = (state.creation.flags & YAAGL_FSR_FG_DEPTH_INFINITE)
-                    ? INFINITY : p.camera_far * worldScale;
-                effect.fieldOfView =
-                    p.camera_fov_vertical_radians * 57.295779513082320876f;
                 effect.aspectRatio = float(p.render_width) / float(p.render_height);
 
                 if (@available(macOS 27.0, *)) {
-                    effect.contentWidth = configuration.width;
-                    effect.contentHeight = configuration.height;
-                    simd_float3 position = {
-                        p.camera_position[0] * worldScale,
-                        p.camera_position[1] * worldScale,
-                        p.camera_position[2] * worldScale};
-                    simd_float3 right = {
-                        p.camera_right[0], p.camera_right[1], p.camera_right[2]};
-                    simd_float3 up = {
-                        p.camera_up[0], p.camera_up[1], p.camera_up[2]};
-                    simd_float3 forward = {
-                        p.camera_forward[0], p.camera_forward[1], p.camera_forward[2]};
-                    simd_float4x4 view{};
-                    view.columns[0] = {right.x, up.x, forward.x, 0};
-                    view.columns[1] = {right.y, up.y, forward.y, 0};
-                    view.columns[2] = {right.z, up.z, forward.z, 0};
-                    view.columns[3] = {-simd_dot(right, position),
-                                       -simd_dot(up, position),
-                                       -simd_dot(forward, position), 1};
-                    float n = effect.nearPlane, f = effect.farPlane;
-                    float y = 1.0f / std::tan(p.camera_fov_vertical_radians * 0.5f);
-                    bool reversed = effect.depthReversed;
-                    float a = std::isinf(f) ? (reversed ? 0.0f : 1.0f)
-                              : (reversed ? n / (n - f) : f / (f - n));
-                    float b = std::isinf(f) ? (reversed ? n : -n)
-                              : (reversed ? n * f / (f - n) : -n * f / (f - n));
-                    simd_float4x4 projection{};
-                    projection.columns[0] = {y / effect.aspectRatio, 0, 0, 0};
-                    projection.columns[1] = {0, y, 0, 0};
-                    projection.columns[2] = {0, 0, a, 1};
-                    projection.columns[3] = {0, 0, b, 0};
-                    effect.worldToViewMatrix = view;
-                    effect.viewToClipMatrix = projection;
+                    // All interpolator inputs are normalized to the origin-zero
+                    // generation-rectangle domain before MetalFX consumes them.
+                    effect.contentWidth = configuration.outputWidth;
+                    effect.contentHeight = configuration.outputHeight;
+                    effect.depthContentOffsetX = 0;
+                    effect.depthContentOffsetY = 0;
+                    effect.motionContentOffsetX = 0;
+                    effect.motionContentOffsetY = 0;
+                    effect.outputOffsetX = 0;
+                    effect.outputOffsetY = 0;
+                }
+                CameraPlanes planes{};
+                if (!normalizeCameraPlanes(p, state.creation.flags, planes)) {
+                    logFailure(YAAGL_FSR_FG_DISPATCH, "encode_camera_planes", Parameter,
+                               state.creation.flags, p.render_width, p.render_height,
+                               p.camera_near, p.camera_far,
+                               p.camera_fov_vertical_radians, p.view_space_to_meters);
+                    return false;
+                }
+                const float worldScale = p.view_space_to_meters > 0
+                    ? p.view_space_to_meters : 1.0f;
+                effect.nearPlane = planes.nearPlane * worldScale;
+                effect.farPlane = planes.farPlane * worldScale;
+                effect.fieldOfView =
+                    p.camera_fov_vertical_radians * 57.295779513082320876f;
+                if (p.camera_info_present) {
+                    if (@available(macOS 27.0, *)) {
+                        simd_float3 position = {p.camera_position[0] * worldScale,
+                            p.camera_position[1] * worldScale, p.camera_position[2] * worldScale};
+                        simd_float3 right = {p.camera_right[0], p.camera_right[1], p.camera_right[2]};
+                        simd_float3 up = {p.camera_up[0], p.camera_up[1], p.camera_up[2]};
+                        simd_float3 forward = {p.camera_forward[0], p.camera_forward[1],
+                                               p.camera_forward[2]};
+                        simd_float4x4 view{};
+                        view.columns[0] = {right.x, up.x, forward.x, 0};
+                        view.columns[1] = {right.y, up.y, forward.y, 0};
+                        view.columns[2] = {right.z, up.z, forward.z, 0};
+                        view.columns[3] = {-simd_dot(right, position), -simd_dot(up, position),
+                                           -simd_dot(forward, position), 1};
+                        float n = effect.nearPlane, f = effect.farPlane;
+                        float y = 1.0f / std::tan(p.camera_fov_vertical_radians * 0.5f);
+                        bool reversed = effect.depthReversed;
+                        float a = std::isinf(f) ? (reversed ? 0.0f : 1.0f)
+                            : (reversed ? n / (n - f) : f / (f - n));
+                        float b = std::isinf(f) ? (reversed ? n : -n)
+                            : (reversed ? n * f / (f - n) : -n * f / (f - n));
+                        simd_float4x4 projection{};
+                        projection.columns[0] = {y / effect.aspectRatio, 0, 0, 0};
+                        projection.columns[1] = {0, y, 0, 0};
+                        projection.columns[2] = {0, 0, a, 1};
+                        projection.columns[3] = {0, 0, b, 0};
+                        effect.worldToViewMatrix = view;
+                        effect.viewToClipMatrix = projection;
+                    }
                 }
 
                 if (configuration.mode == Mode::Metal4)
@@ -646,24 +1055,30 @@ bool PreparedFrame::encode(
                     [(id<MTLFXFrameInterpolator>)interpolator.get()
                         encodeToCommandBuffer:(id<MTLCommandBuffer>)buffer];
 
-                const Copy outputCopy{
-                    (id<MTLTexture>)output.get(), (id<MTLTexture>)impl_->second.get(),
-                    configuration.outputWidth, configuration.outputHeight};
-                if (!copyTextures(buffer, (id)fence, configuration.mode,
-                                  &outputCopy, 1, execution->objects))
-                    return false;
+                if (!computePass(buffer, (id)fence, configuration.mode, device,
+                                 (id<MTLComputePipelineState>)configuration.encodePipeline.get(),
+                                 (id<MTLTexture>)output.get(),
+                                 (id<MTLTexture>)outputView.get(),
+                                 (id<MTLBuffer>)colorParameters.get(), colorParams,
+                                 execution->objects))
+                    return fail("encode_output_scatter");
                 state.history = current;
                 state.historyConfiguration = impl_->snapshot->configuration;
+                state.historyDispatch = impl_->dispatch;
+                state.historyFrame = frame;
+                logFirstEncode(configuration.mode, state.creation.flags,
+                               p.render_width, p.render_height,
+                               effect.nearPlane, effect.farPlane,
+                               p.camera_fov_vertical_radians, p.view_space_to_meters);
                 return true;
             }
-            return false;
+            return fail("encode_os_unavailable");
         } @catch (NSException* exception) {
-            logError([[exception reason] UTF8String]);
-            return false;
+            const char* reason = [[exception reason] UTF8String];
+            return fail(reason && *reason ? reason : "encode_objc_exception");
         }
     } catch (...) {
-        logError("exception during encode");
-        return false;
+        return fail("encode_cpp_exception");
     }
 }
 
@@ -676,6 +1091,8 @@ bool initialize(const std::uint8_t* imageBase) noexcept {
         } else {
             result = false;
         }
+        const char* path = std::getenv("YAAGL_FSR_LOG");
+        if (path && path[0] == '/' && !fsrLog) fsrLog = std::fopen(path, "a");
         ready.store(result, std::memory_order_release);
         return result;
     } catch (...) {
@@ -692,10 +1109,20 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
     if (!arguments) return Parameter;
     auto& header = *static_cast<yaagl_fsr_fg_packet_header*>(arguments);
     if (header.size < sizeof(header)) return Parameter;
-    auto finish = [&](std::uint32_t result) {
+    auto finish = [&](std::uint32_t result, const char* stage = "request",
+                      std::uint32_t flags = 0) {
         header.result = result;
-        if (result != Ok) logError(result == Unsupported
-            ? "unsupported frame-generation request" : "frame-generation request failed");
+        if (result != Ok) {
+            if (operation == YAAGL_FSR_FG_PREPARE &&
+                header.size == sizeof(yaagl_fsr_fg_prepare_packet)) {
+                const auto& p = *static_cast<const yaagl_fsr_fg_prepare_packet*>(arguments);
+                logFailure(operation, stage, result, flags, p.render_width, p.render_height,
+                           p.camera_near, p.camera_far, p.camera_fov_vertical_radians,
+                           p.view_space_to_meters);
+            } else {
+                logFailure(operation, stage, result, flags);
+            }
+        }
         return result;
     };
     if (header.operation != operation ||
@@ -808,15 +1235,19 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
             Resources resources;
             auto implementation = std::make_shared<PreparedFrame::Impl>();
             implementation->state = state;
-            std::array<std::uint64_t, 2> addresses{};
-            std::array<std::uint32_t, 2> states{};
+            std::array<std::uint64_t, 3> addresses{};
+            std::array<std::uint32_t, 3> states{};
+            unsigned resourceCount = 2;
             std::uint64_t frame = generate ? d->frame_id : p->frame_id;
 
             if (!generate) {
-                if (!validParameters(*p) ||
+                CameraPlanes planes{};
+                if (!normalizeCameraPlanes(*p, state->creation.flags, planes))
+                    return finish(Parameter, "prepare_camera_planes", state->creation.flags);
+                if (!validParameters(*p, state->creation.flags) ||
                     p->render_width > state->creation.max_render_width ||
                     p->render_height > state->creation.max_render_height)
-                    return finish(Parameter);
+                    return finish(Parameter, "prepare_parameters", state->creation.flags);
                 if (state->frames.count(frame)) return finish(Parameter);
                 // Prepare may continue while presentation has FG disabled.
                 // Retire unconsumed metadata; recorded work owns its snapshot separately.
@@ -825,63 +1256,103 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
                         [](const auto& a, const auto& b) { return a.first < b.first; });
                     state->frames.erase(oldest);
                 }
-                addresses = {p->depth, p->motion_vectors};
-                states = {p->depth_state, p->motion_vectors_state};
+                addresses = {p->depth, p->motion_vectors, 0};
+                states = {p->depth_state, p->motion_vectors_state, 0};
+                const bool displayMotion = (state->creation.flags &
+                    YAAGL_FSR_FG_DISPLAY_RESOLUTION_MOTION_VECTORS) != 0;
+                const NSUInteger motionWidth = displayMotion
+                    ? state->creation.display_width : p->render_width;
+                const NSUInteger motionHeight = displayMotion
+                    ? state->creation.display_height : p->render_height;
                 if (!addresses[0] || !addresses[1] || addresses[0] == addresses[1] ||
-                    !matches(pointer(addresses[0]), true, state->luid) ||
-                    !matches(pointer(addresses[1]), true, state->luid))
-                    return finish(Parameter);
-                if (!mapPair(resources, *state, command, addresses[0], addresses[1],
-                             false, p->render_width, p->render_height))
+                    !mapOne(resources, 0, *state, command, addresses[0], false,
+                            p->render_width, p->render_height) ||
+                    !mapOne(resources, 1, *state, command, addresses[1], false,
+                            motionWidth, motionHeight) ||
+                    rootTexture((id<MTLTexture>)resources.values[0].texture) ==
+                    rootTexture((id<MTLTexture>)resources.values[1].texture))
                     return finish(Unsupported);
                 auto depth = (id<MTLTexture>)resources.values[0].texture;
                 auto motion = (id<MTLTexture>)resources.values[1].texture;
-                auto configuration = configure(*state, command, *p, depth, motion);
+                auto configuration = configure(*state, command, *p, depth,
+                    MTLPixelFormatRGBA16Float, MTLPixelFormatInvalid,
+                    p->render_width, p->render_height,
+                    FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB);
                 if (!configuration) return finish(Unsupported);
                 auto snapshot = std::make_shared<Snapshot>();
                 snapshot->configuration = configuration;
                 snapshot->parameters = *p;
+                snapshot->depthWidth = p->render_width;
+                snapshot->depthHeight = p->render_height;
+                snapshot->motionWidth = motionWidth;
+                snapshot->motionHeight = motionHeight;
+                snapshot->hasPreviousJitter = state->hasPreparedJitter &&
+                    state->preparedFrame + 1 == frame && !p->reset;
+                snapshot->previousJitterX = state->preparedJitterX;
+                snapshot->previousJitterY = state->preparedJitterY;
                 snapshot->depth = privateTexture(
                     (id<MTLDevice>)configuration->device.get(), configuration->depth,
-                    configuration->width, configuration->height, configuration->depthUsage);
+                    p->render_width, p->render_height, MTLTextureUsageShaderRead);
                 snapshot->motion = privateTexture(
-                    (id<MTLDevice>)configuration->device.get(), configuration->motion,
-                    configuration->width, configuration->height, configuration->motionUsage);
+                    (id<MTLDevice>)configuration->device.get(), motion.pixelFormat,
+                    motionWidth, motionHeight, MTLTextureUsageShaderRead);
                 if (!snapshot->depth || !snapshot->motion) return finish(Unsupported);
+                state->hasPreparedJitter = true;
+                state->preparedFrame = frame;
+                state->preparedJitterX = p->jitter_x;
+                state->preparedJitterY = p->jitter_y;
                 implementation->snapshot = std::move(snapshot);
             } else {
-                if (d->num_generated_frames != 1 ||
-                    d->generation_rect_left || d->generation_rect_top ||
-                    (d->generation_rect_width &&
-                     d->generation_rect_width != state->creation.display_width) ||
-                    (d->generation_rect_height &&
-                     d->generation_rect_height != state->creation.display_height))
-                    return finish(Unsupported);
+                if (d->num_generated_frames != 1) return finish(Unsupported);
+                std::int32_t rectLeft = 0, rectTop = 0;
+                NSUInteger rectWidth = 0, rectHeight = 0;
+                if (!validTransfer(*d) ||
+                    !resolveRect(*d, state->creation.display_width,
+                                 state->creation.display_height, rectLeft, rectTop,
+                                 rectWidth, rectHeight))
+                    return finish(Parameter);
                 auto found = state->frames.find(frame);
                 if (found == state->frames.end()) return finish(Parameter);
-                implementation->snapshot = found->second;
                 implementation->kind = PreparedFrame::Impl::Kind::Generate;
                 implementation->reset = d->reset != 0;
-                addresses = {d->present_color, d->output};
-                states = {d->present_color_state, d->output_state};
-                if (!addresses[0] || !addresses[1] || addresses[0] == addresses[1] ||
-                    !matches(pointer(addresses[0]), true, state->luid) ||
-                    !matches(pointer(addresses[1]), true, state->luid))
-                    return finish(Parameter);
-                auto& configuration = *found->second->configuration;
+                implementation->dispatch = *d;
+                addresses = {d->present_color, d->output, d->hudless_color};
+                states = {d->present_color_state, d->output_state, d->hudless_color_state};
                 if (!mapPair(resources, *state, command, addresses[0], addresses[1],
-                             true, configuration.outputWidth, configuration.outputHeight))
+                             true, state->creation.display_width,
+                             state->creation.display_height))
                     return finish(Unsupported);
-                for (const auto& resource : resources.values) {
-                    auto texture = (id<MTLTexture>)resource.texture;
-                    if (texture.pixelFormat != configuration.color ||
-                        texture.width != configuration.outputWidth ||
-                        texture.height != configuration.outputHeight)
+                auto present = (id<MTLTexture>)resources.values[0].texture;
+                auto output = (id<MTLTexture>)resources.values[1].texture;
+                if (present.width != state->creation.display_width ||
+                    present.height != state->creation.display_height ||
+                    output.width != state->creation.display_width ||
+                    output.height != state->creation.display_height ||
+                    present.pixelFormat != output.pixelFormat)
+                    return finish(Unsupported);
+                id<MTLTexture> scene = present;
+                MTLPixelFormat uiFormat = MTLPixelFormatInvalid;
+                if (d->hudless_color) {
+                    resourceCount = 3;
+                    if (!mapOne(resources, 2, *state, command, d->hudless_color, false,
+                                state->creation.display_width, state->creation.display_height))
                         return finish(Unsupported);
+                    scene = (id<MTLTexture>)resources.values[2].texture;
+                    if (rootTexture(scene) == rootTexture(output)) return finish(Parameter);
+                    uiFormat = present.pixelFormat;
                 }
+                auto dispatchSnapshot = std::make_shared<Snapshot>(*found->second);
+                dispatchSnapshot->configuration = configure(*state, command,
+                    dispatchSnapshot->parameters,
+                    (id<MTLTexture>)dispatchSnapshot->depth.get(), scene.pixelFormat,
+                    uiFormat, rectWidth, rectHeight, d->backbuffer_transfer_function);
+                if (!dispatchSnapshot->configuration) return finish(Unsupported);
+                implementation->snapshot = std::move(dispatchSnapshot);
             }
             implementation->first = Object((id)resources.values[0].texture);
             implementation->second = Object((id)resources.values[1].texture);
+            if (resourceCount == 3)
+                implementation->third = Object((id)resources.values[2].texture);
             auto prepared = std::shared_ptr<const PreparedFrame>(
                 new PreparedFrame(implementation));
 
@@ -892,7 +1363,7 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
             if (!generate)
                 state->frames.emplace(frame, implementation->snapshot);
             if (!record(list, command, resources, prepared, header.context,
-                        frame, addresses, states, generate)) {
+                        frame, addresses, states, resourceCount, generate)) {
                 if (!generate) state->frames.erase(frame);
                 return finish(Runtime);
             }

@@ -3,12 +3,14 @@
 
 #include <stdint.h>
 
-#define YAAGL_FSR_FG_BRIDGE_VERSION 1u
+#define YAAGL_FSR_FG_BRIDGE_VERSION 2u
 
 enum yaagl_fsr_fg_create_flags
 {
     YAAGL_FSR_FG_DEPTH_INVERTED = 1u << 0,
-    YAAGL_FSR_FG_DEPTH_INFINITE = 1u << 1
+    YAAGL_FSR_FG_DEPTH_INFINITE = 1u << 1,
+    YAAGL_FSR_FG_DISPLAY_RESOLUTION_MOTION_VECTORS = 1u << 2,
+    YAAGL_FSR_FG_MOTION_VECTORS_JITTERED = 1u << 3
 };
 
 enum yaagl_fsr_fg_operation
@@ -79,6 +81,7 @@ struct yaagl_fsr_fg_prepare_packet
     float camera_up[3];
     float camera_right[3];
     float camera_forward[3];
+    uint32_t camera_info_present;
 };
 
 struct yaagl_fsr_fg_dispatch_packet
@@ -88,15 +91,17 @@ struct yaagl_fsr_fg_dispatch_packet
     uint64_t frame_id;
     uint64_t present_color;
     uint64_t output;
+    uint64_t hudless_color;
     uint32_t present_color_state;
     uint32_t output_state;
+    uint32_t hudless_color_state;
     uint32_t num_generated_frames;
     uint32_t reset;
     uint32_t backbuffer_transfer_function;
-    uint32_t generation_rect_left;
-    uint32_t generation_rect_top;
-    uint32_t generation_rect_width;
-    uint32_t generation_rect_height;
+    int32_t generation_rect_left;
+    int32_t generation_rect_top;
+    int32_t generation_rect_width;
+    int32_t generation_rect_height;
     float min_luminance;
     float max_luminance;
 };

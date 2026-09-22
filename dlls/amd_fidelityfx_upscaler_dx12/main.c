@@ -312,7 +312,7 @@ static ffxReturnCode_t query_impl(ffxContext *handle, ffxQueryDescHeader *desc)
         float ratio;
         if (!query->renderWidth || !query->displayWidth) return FFX_API_RETURN_ERROR_PARAMETER;
         ratio = (float)query->displayWidth / query->renderWidth;
-        if (query->pOutPhaseCount) *query->pOutPhaseCount = (int32_t)(8.0f * ratio * ratio + 0.5f);
+        if (query->pOutPhaseCount) *query->pOutPhaseCount = (int32_t)(8.0f * powf(ratio, 2.0f));
         return FFX_API_RETURN_OK;
     }
     case FFX_API_QUERY_DESC_TYPE_UPSCALE_GETJITTEROFFSET:
@@ -349,8 +349,9 @@ static ffxReturnCode_t dispatch_impl(ffxContext *handle, const ffxDispatchDescHe
     struct fsr_context *context;
     struct yaagl_fsr_dispatch_packet packet;
     ffxReturnCode_t result;
-    if (!desc || desc->type != FFX_API_DISPATCH_DESC_TYPE_UPSCALE)
-        return desc && (desc->type & FFX_API_EFFECT_MASK) != FFX_API_EFFECT_ID_UPSCALE
+    if (!desc) return FFX_API_RETURN_ERROR_PARAMETER;
+    if (desc->type != FFX_API_DISPATCH_DESC_TYPE_UPSCALE)
+        return (desc->type & FFX_API_EFFECT_MASK) != FFX_API_EFFECT_ID_UPSCALE
             ? FFX_API_RETURN_NO_PROVIDER : FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
     if (!(context = find_context(handle))) return FFX_API_RETURN_ERROR_PARAMETER;
     dispatch = (const struct ffxDispatchDescUpscale *)desc;

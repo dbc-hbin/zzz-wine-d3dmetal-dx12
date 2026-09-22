@@ -8,6 +8,7 @@
 #define COBJMACROS
 
 #include <stdbool.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -20,6 +21,7 @@
 #include "d3d12.h"
 #include "dxgi1_6.h"
 #include "unixlib.h"
+#include "wine/debug.h"
 
 #include "../../d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/ffx_api.h"
 #include "../../d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/framegeneration/include/ffx_framegeneration.h"
@@ -30,6 +32,8 @@
 #define BACKEND_DX12_DESC_TYPE 2u
 #define BRIDGE_INELIGIBLE 4u
 #define MAX_DESCRIPTOR_CHAIN 64u
+
+WINE_DEFAULT_DEBUG_CHANNEL(yaagl_fsr_fg);
 
 static const char automatic_provider_name[] =
     "Yaagl automatic frame generation (MetalFX or native FSR)";
@@ -142,6 +146,30 @@ struct callback_scope
     struct fg_context *context;
 };
 
+static BOOL binding_matches(
+    const struct callback_binding *binding,
+    const struct ffxConfigureDescFrameGeneration *desc)
+{
+    return binding && binding->present == desc->presentCallback &&
+        binding->present_user == desc->presentCallbackUserContext &&
+        binding->generate == desc->frameGenerationCallback &&
+        binding->generate_user == desc->frameGenerationCallbackUserContext;
+}
+
+struct frame_config_snapshot
+{
+    struct frame_config_snapshot *next;
+    uint64_t frame_id;
+    struct FfxApiResource hudless;
+};
+
+struct prepare_desc_prefix
+{
+    ffxDispatchDescHeader header;
+    uint64_t frame_id;
+    uint32_t flags;
+};
+
 struct fg_context
 {
     struct fg_context *next;
@@ -166,12 +194,27 @@ struct fg_context
     BOOL native_config_valid;
 
     struct FfxApiResource hudless;
+    struct frame_config_snapshot *frame_configs;
+    uint32_t display_width;
+    uint32_t display_height;
+    uint32_t max_render_width;
+    uint32_t max_render_height;
+    uint32_t hudless_format;
+    uint64_t last_prepare_frame_id;
+    ffxApiMessage message;
+    uint32_t debug_level;
+    BOOL have_last_prepare_frame_id;
+    BOOL debug_checking;
+    BOOL depth_infinite;
     BOOL enabled;
 };
 
 static SRWLOCK contexts_lock = SRWLOCK_INIT;
 static CONDITION_VARIABLE contexts_changed = CONDITION_VARIABLE_INIT;
 static struct fg_context *contexts;
+static SRWLOCK debug_lock = SRWLOCK_INIT;
+static ffxApiMessage global_message;
+static uint32_t global_debug_level;
 
 static BOOL CALLBACK initialize_native(INIT_ONCE *once, void *parameter, void **result)
 {
@@ -298,6 +341,176 @@ static BOOL matching_allocator(const struct fg_context *context,
            context->allocation.pUserData == callbacks->pUserData;
 }
 
+static void release_resource(struct FfxApiResource *resource)
+{
+    if (resource->resource) IUnknown_Release((IUnknown *)resource->resource);
+    memset(resource, 0, sizeof(*resource));
+}
+
+static void retain_resource(struct FfxApiResource *output,
+                            const struct FfxApiResource *input)
+{
+    *output = *input;
+    if (output->resource) IUnknown_AddRef((IUnknown *)output->resource);
+}
+
+static void release_frame_config(struct fg_context *context,
+                                 struct frame_config_snapshot *snapshot)
+{
+    release_resource(&snapshot->hudless);
+    free_memory(context_allocator(context), snapshot);
+}
+
+/* dispatch_lock protects this list and the prepare frame history. */
+static ffxReturnCode_t snapshot_frame_config(
+    struct fg_context *context, const struct ffxConfigureDescFrameGeneration *desc)
+{
+    struct frame_config_snapshot *snapshot, **link;
+
+    if (!desc->frameGenerationEnabled) return FFX_API_RETURN_OK;
+
+    snapshot = allocate_memory(context_allocator(context), sizeof(*snapshot));
+    if (!snapshot) return FFX_API_RETURN_ERROR_MEMORY;
+    memset(snapshot, 0, sizeof(*snapshot));
+    snapshot->frame_id = desc->frameID;
+    retain_resource(&snapshot->hudless, &desc->HUDLessColor);
+
+    EnterCriticalSection(&context->dispatch_lock);
+    for (link = &context->frame_configs; *link; link = &(*link)->next)
+    {
+        if ((*link)->frame_id == snapshot->frame_id)
+        {
+            struct frame_config_snapshot *old = *link;
+            snapshot->next = old->next;
+            *link = snapshot;
+            LeaveCriticalSection(&context->dispatch_lock);
+            release_frame_config(context, old);
+            return FFX_API_RETURN_OK;
+        }
+    }
+    snapshot->next = context->frame_configs;
+    context->frame_configs = snapshot;
+    LeaveCriticalSection(&context->dispatch_lock);
+    return FFX_API_RETURN_OK;
+}
+
+static struct frame_config_snapshot *find_frame_config(
+    struct fg_context *context, uint64_t frame_id)
+{
+    struct frame_config_snapshot *snapshot, *best = NULL;
+
+    for (snapshot = context->frame_configs; snapshot; snapshot = snapshot->next)
+    {
+        if (snapshot->frame_id == frame_id) return snapshot;
+        if (snapshot->frame_id < frame_id &&
+            (!best || snapshot->frame_id > best->frame_id))
+            best = snapshot;
+    }
+    return best;
+}
+
+static void keep_frame_config(struct fg_context *context, uint64_t frame_id)
+{
+    struct frame_config_snapshot **link, *snapshot, *discard = NULL;
+
+    EnterCriticalSection(&context->dispatch_lock);
+    for (link = &context->frame_configs; *link;)
+    {
+        if ((*link)->frame_id == frame_id)
+        {
+            link = &(*link)->next;
+            continue;
+        }
+        snapshot = *link;
+        *link = snapshot->next;
+        snapshot->next = discard;
+        discard = snapshot;
+    }
+    LeaveCriticalSection(&context->dispatch_lock);
+
+    while (discard)
+    {
+        snapshot = discard;
+        discard = discard->next;
+        release_frame_config(context, snapshot);
+    }
+}
+
+/*
+ * A completed generation callback establishes the newest configuration at or
+ * below frame_id as the fallback for later frame IDs.  Older snapshots can no
+ * longer be selected; the fallback itself and every future configuration must
+ * remain available.
+ */
+static void retire_frame_configs(struct fg_context *context, uint64_t frame_id)
+{
+    struct frame_config_snapshot **link, *snapshot, *floor = NULL, *discard = NULL;
+
+    EnterCriticalSection(&context->dispatch_lock);
+    for (snapshot = context->frame_configs; snapshot; snapshot = snapshot->next)
+    {
+        if (snapshot->frame_id <= frame_id &&
+            (!floor || snapshot->frame_id > floor->frame_id))
+            floor = snapshot;
+    }
+
+    if (floor)
+    {
+        for (link = &context->frame_configs; *link;)
+        {
+            if ((*link)->frame_id >= floor->frame_id)
+            {
+                link = &(*link)->next;
+                continue;
+            }
+            snapshot = *link;
+            *link = snapshot->next;
+            snapshot->next = discard;
+            discard = snapshot;
+        }
+    }
+    LeaveCriticalSection(&context->dispatch_lock);
+
+    while (discard)
+    {
+        snapshot = discard;
+        discard = discard->next;
+        release_frame_config(context, snapshot);
+    }
+}
+
+static void clear_frame_configs(struct fg_context *context)
+{
+    struct frame_config_snapshot *snapshot, *next;
+
+    EnterCriticalSection(&context->dispatch_lock);
+    snapshot = context->frame_configs;
+    context->frame_configs = NULL;
+    context->have_last_prepare_frame_id = FALSE;
+    LeaveCriticalSection(&context->dispatch_lock);
+
+    while (snapshot)
+    {
+        next = snapshot->next;
+        release_frame_config(context, snapshot);
+        snapshot = next;
+    }
+}
+
+static void store_native_config(struct fg_context *context,
+                                const struct ffxConfigureDescFrameGeneration *desc)
+{
+    struct FfxApiResource hudless;
+
+    retain_resource(&hudless, &desc->HUDLessColor);
+    release_resource(&context->hudless);
+    context->hudless = hudless;
+    context->native_config = *desc;
+    context->native_config.header.pNext = NULL;
+    context->native_config.HUDLessColor = context->hudless;
+    context->native_config_valid = TRUE;
+}
+
 static struct fg_context *acquire_context(ffxContext *handle)
 {
     struct fg_context *context, *found = NULL;
@@ -323,6 +536,20 @@ static void release_context(struct fg_context *context)
     --context->references;
     WakeAllConditionVariable(&contexts_changed);
     ReleaseSRWLockExclusive(&contexts_lock);
+}
+
+static void report_validation(struct fg_context *context, const WCHAR *message)
+{
+    ffxApiMessage callback;
+    uint32_t level;
+
+    if (!context || !context->debug_checking) return;
+    AcquireSRWLockShared(&debug_lock);
+    callback = context->message ? context->message : global_message;
+    level = context->message ? context->debug_level : global_debug_level;
+    ReleaseSRWLockShared(&debug_lock);
+    if (callback && (level & FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_ERRORS))
+        callback(FFX_API_MESSAGE_TYPE_ERROR, message);
 }
 
 static BOOL in_callback(void)
@@ -396,11 +623,36 @@ static ffxReturnCode_t translated_dispatch(struct fg_context *context,
                                          const ffxDispatchDescHeader *header)
 {
     struct yaagl_fsr_fg_dispatch_packet packet;
+    struct frame_config_snapshot *config;
     const ffxDispatchDescFrameGeneration *desc = (const void *)header;
+    int64_t rect_right, rect_bottom;
 
     if (header->pNext) return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
     if (!desc->commandList || !desc->presentColor.resource ||
-        desc->numGeneratedFrames != 1 || !desc->outputs[0].resource)
+        desc->numGeneratedFrames != 1 || !desc->outputs[0].resource ||
+        desc->outputs[0].resource == desc->presentColor.resource ||
+        desc->backbufferTransferFunction > FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB ||
+        !isfinite(desc->minMaxLuminance[0]) ||
+        !isfinite(desc->minMaxLuminance[1]) ||
+        desc->minMaxLuminance[0] > desc->minMaxLuminance[1] ||
+        (desc->backbufferTransferFunction == FFX_API_BACKBUFFER_TRANSFER_FUNCTION_PQ &&
+         desc->minMaxLuminance[1] <= 0.0f) ||
+        (desc->backbufferTransferFunction == FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB &&
+         desc->minMaxLuminance[1] <= desc->minMaxLuminance[0]))
+        return FFX_API_RETURN_ERROR_PARAMETER;
+
+    if (desc->generationRect.width || desc->generationRect.height)
+    {
+        rect_right = (int64_t)desc->generationRect.left + desc->generationRect.width;
+        rect_bottom = (int64_t)desc->generationRect.top + desc->generationRect.height;
+        if (desc->generationRect.left < 0 || desc->generationRect.top < 0 ||
+            desc->generationRect.width <= 0 || desc->generationRect.height <= 0 ||
+            rect_right > context->display_width || rect_bottom > context->display_height)
+            return FFX_API_RETURN_ERROR_PARAMETER;
+    }
+
+    config = find_frame_config(context, desc->frameID);
+    if (config && (desc->outputs[0].resource == config->hudless.resource))
         return FFX_API_RETURN_ERROR_PARAMETER;
 
     memset(&packet, 0, sizeof(packet));
@@ -413,8 +665,15 @@ static ffxReturnCode_t translated_dispatch(struct fg_context *context,
     packet.present_color_state = desc->presentColor.state;
     packet.output = (uint64_t)(uintptr_t)desc->outputs[0].resource;
     packet.output_state = desc->outputs[0].state;
+    if (config)
+    {
+        packet.hudless_color = (uint64_t)(uintptr_t)config->hudless.resource;
+        packet.hudless_color_state = config->hudless.state;
+    }
     packet.num_generated_frames = desc->numGeneratedFrames;
-    packet.reset = desc->reset;
+    packet.reset = desc->reset ||
+        (context->have_last_prepare_frame_id &&
+         desc->frameID != context->last_prepare_frame_id);
     packet.backbuffer_transfer_function = desc->backbufferTransferFunction;
     packet.generation_rect_left = desc->generationRect.left;
     packet.generation_rect_top = desc->generationRect.top;
@@ -465,6 +724,7 @@ static ffxReturnCode_t translated_prepare(struct fg_context *context,
 {
     struct yaagl_fsr_fg_prepare_packet packet;
     const ffxApiHeader *entry;
+    ffxReturnCode_t result;
     BOOL have_camera = FALSE;
 
     memset(&packet, 0, sizeof(packet));
@@ -484,7 +744,7 @@ static ffxReturnCode_t translated_prepare(struct fg_context *context,
     {
         const struct ffxDispatchDescFrameGenerationPrepare *desc = (const void *)header;
         COPY_PREPARE_FIELDS(packet, desc);
-        packet.reset = desc->unused_reset;
+        /* The pinned provider explicitly ignores V1 unused_reset. */
 
         for (entry = header->pNext; entry; entry = entry->pNext)
         {
@@ -498,21 +758,47 @@ static ffxReturnCode_t translated_prepare(struct fg_context *context,
         }
     }
 
+    packet.camera_info_present = have_camera;
+
     if (!packet.command_list || !packet.depth || !packet.motion_vectors ||
-        !packet.render_width || !packet.render_height)
+        packet.depth == packet.motion_vectors ||
+        !packet.render_width || !packet.render_height ||
+        !isfinite(packet.jitter_x) || !isfinite(packet.jitter_y) ||
+        !isfinite(packet.motion_scale_x) || !isfinite(packet.motion_scale_y) ||
+        !isfinite(packet.frame_time_delta_ms) || packet.frame_time_delta_ms < 0.0f ||
+        !isfinite(packet.camera_near) ||
+        (!context->depth_infinite && !isfinite(packet.camera_far)) ||
+        !isfinite(packet.camera_fov_vertical_radians) ||
+        packet.camera_fov_vertical_radians <= 0.0f ||
+        packet.camera_fov_vertical_radians >= 3.141592654f ||
+        !isfinite(packet.view_space_to_meters) ||
+        packet.render_width > context->max_render_width ||
+        packet.render_height > context->max_render_height)
         return FFX_API_RETURN_ERROR_PARAMETER;
 
-    /*
-     * Legacy applications may omit camera vectors.  Keep these explicitly
-     * zero; the bridge decides eligibility/validity, rather than inventing a
-     * camera basis.
-     */
-    (void)have_camera;
-    return bridge_call(&packet);
-}
+    if (have_camera)
+    {
+        unsigned int i;
+        for (i = 0; i < 3; ++i)
+            if (!isfinite(packet.camera_position[i]) ||
+                !isfinite(packet.camera_up[i]) ||
+                !isfinite(packet.camera_right[i]) ||
+                !isfinite(packet.camera_forward[i]))
+                return FFX_API_RETURN_ERROR_PARAMETER;
+    }
 
-#undef COPY_PREPARE_FIELDS
-#undef COPY_CAMERA_FIELDS
+    if (context->have_last_prepare_frame_id &&
+        packet.frame_id != context->last_prepare_frame_id + 1)
+        packet.reset = TRUE;
+
+    result = bridge_call(&packet);
+    if (result == FFX_API_RETURN_OK)
+    {
+        context->last_prepare_frame_id = packet.frame_id;
+        context->have_last_prepare_frame_id = TRUE;
+    }
+    return result;
+}
 
 static ffxReturnCode_t configure_frame_generation(
     struct fg_context *context, const struct ffxConfigureDescFrameGeneration *desc);
@@ -531,6 +817,143 @@ static ffxReturnCode_t select_native(struct fg_context *context)
     return result;
 }
 
+static ffxReturnCode_t validate_public_dispatch(
+    const struct fg_context *context, const ffxDispatchDescHeader *header)
+{
+    if (header->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION)
+    {
+        const ffxDispatchDescFrameGeneration *desc = (const void *)header;
+        int64_t right, bottom;
+
+        unsigned int i;
+
+        if (context->mode == CONTEXT_METALFX && header->pNext)
+            return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+        if (!desc->commandList || !desc->presentColor.resource ||
+            !desc->numGeneratedFrames || desc->numGeneratedFrames > 4 ||
+            desc->backbufferTransferFunction > FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB ||
+            !isfinite(desc->minMaxLuminance[0]) ||
+            !isfinite(desc->minMaxLuminance[1]) ||
+            desc->minMaxLuminance[0] > desc->minMaxLuminance[1] ||
+            (desc->backbufferTransferFunction == FFX_API_BACKBUFFER_TRANSFER_FUNCTION_PQ &&
+             desc->minMaxLuminance[1] <= 0.0f) ||
+            (desc->backbufferTransferFunction == FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB &&
+             desc->minMaxLuminance[1] <= desc->minMaxLuminance[0]))
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        for (i = 0; i < desc->numGeneratedFrames; ++i)
+            if (!desc->outputs[i].resource) return FFX_API_RETURN_ERROR_PARAMETER;
+        if (context->mode == CONTEXT_METALFX &&
+            (desc->numGeneratedFrames != 1 ||
+             desc->outputs[0].resource == desc->presentColor.resource))
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        if (desc->generationRect.width || desc->generationRect.height)
+        {
+            right = (int64_t)desc->generationRect.left + desc->generationRect.width;
+            bottom = (int64_t)desc->generationRect.top + desc->generationRect.height;
+            if (desc->generationRect.left < 0 || desc->generationRect.top < 0 ||
+                desc->generationRect.width <= 0 || desc->generationRect.height <= 0 ||
+                right > context->display_width || bottom > context->display_height)
+                return FFX_API_RETURN_ERROR_PARAMETER;
+        }
+        return FFX_API_RETURN_OK;
+    }
+
+    if (header->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE ||
+        header->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_V2)
+    {
+        struct yaagl_fsr_fg_prepare_packet packet;
+        const ffxApiHeader *entry;
+        BOOL have_camera = FALSE;
+        unsigned int i;
+
+        if (((const struct prepare_desc_prefix *)header)->flags &
+            ~(FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_TEAR_LINES |
+              FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_RESET_INDICATORS |
+              FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_VIEW |
+              FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY |
+              FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_PACING_LINES |
+              FFX_FRAMEGENERATION_FLAG_RESERVED_1 |
+              FFX_FRAMEGENERATION_FLAG_RESERVED_2))
+            return FFX_API_RETURN_ERROR_PARAMETER;
+
+        memset(&packet, 0, sizeof(packet));
+        if (header->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_V2)
+        {
+            const struct ffxDispatchDescFrameGenerationPrepareV2 *desc = (const void *)header;
+            if (context->mode == CONTEXT_METALFX && header->pNext)
+                return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+            COPY_PREPARE_FIELDS(packet, desc);
+            COPY_CAMERA_FIELDS(packet, desc);
+            have_camera = TRUE;
+        }
+        else
+        {
+            const struct ffxDispatchDescFrameGenerationPrepare *desc = (const void *)header;
+            COPY_PREPARE_FIELDS(packet, desc);
+            for (entry = header->pNext; entry; entry = entry->pNext)
+            {
+                const struct ffxDispatchDescFrameGenerationPrepareCameraInfo *camera;
+                if (entry->type != FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_CAMERAINFO)
+                {
+                    if (context->mode == CONTEXT_METALFX)
+                        return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+                    break;
+                }
+                if (have_camera) return FFX_API_RETURN_ERROR_PARAMETER;
+                camera = (const void *)entry;
+                COPY_CAMERA_FIELDS(packet, camera);
+                have_camera = TRUE;
+            }
+        }
+        if (!packet.command_list || !packet.depth || !packet.motion_vectors ||
+            packet.depth == packet.motion_vectors || !packet.render_width ||
+            !packet.render_height || packet.render_width > context->max_render_width ||
+            packet.render_height > context->max_render_height ||
+            !isfinite(packet.jitter_x) || !isfinite(packet.jitter_y) ||
+            !isfinite(packet.motion_scale_x) || !isfinite(packet.motion_scale_y) ||
+            !isfinite(packet.frame_time_delta_ms) || packet.frame_time_delta_ms < 0.0f ||
+            !isfinite(packet.camera_near) ||
+            (!context->depth_infinite && !isfinite(packet.camera_far)) ||
+            !isfinite(packet.camera_fov_vertical_radians) ||
+            packet.camera_fov_vertical_radians <= 0.0f ||
+            packet.camera_fov_vertical_radians >= 3.141592654f ||
+            !isfinite(packet.view_space_to_meters))
+            return FFX_API_RETURN_ERROR_PARAMETER;
+        if (have_camera)
+            for (i = 0; i < 3; ++i)
+                if (!isfinite(packet.camera_position[i]) || !isfinite(packet.camera_up[i]) ||
+                    !isfinite(packet.camera_right[i]) || !isfinite(packet.camera_forward[i]))
+                    return FFX_API_RETURN_ERROR_PARAMETER;
+    }
+    return FFX_API_RETURN_OK;
+}
+
+static BOOL prepare_has_native_only_flags(uint32_t flags)
+{
+    return !!(flags & (FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_TEAR_LINES |
+                       FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_RESET_INDICATORS |
+                       FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_VIEW |
+                       FFX_FRAMEGENERATION_FLAG_RESERVED_1 |
+                       FFX_FRAMEGENERATION_FLAG_RESERVED_2));
+}
+
+static BOOL prepare_requires_native(const ffxDispatchDescHeader *header)
+{
+    const ffxApiHeader *entry;
+
+    if (header->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_V2)
+        return header->pNext != NULL;
+    if (header->type != FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE)
+        return FALSE;
+    for (entry = header->pNext; entry; entry = entry->pNext)
+        if (entry->type != FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_CAMERAINFO)
+            return TRUE;
+    return FALSE;
+}
+
+#undef COPY_PREPARE_FIELDS
+#undef COPY_CAMERA_FIELDS
+
 static ffxReturnCode_t dispatch_context(struct fg_context *context,
                                       const ffxDispatchDescHeader *desc)
 {
@@ -546,6 +969,17 @@ static ffxReturnCode_t dispatch_context(struct fg_context *context,
             {
                 ReleaseSRWLockExclusive(&context->configure_lock);
                 return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+            }
+
+            if (prepare_has_native_only_flags(
+                    ((const struct prepare_desc_prefix *)desc)->flags) ||
+                prepare_requires_native(desc))
+            {
+                result = select_native(context);
+                if (result == FFX_API_RETURN_OK)
+                    result = native.dispatch(&context->original, desc);
+                ReleaseSRWLockExclusive(&context->configure_lock);
+                return result;
             }
 
             EnterCriticalSection(&context->dispatch_lock);
@@ -583,7 +1017,11 @@ static ffxReturnCode_t dispatch_context(struct fg_context *context,
         {
         case FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE:
         case FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE_V2:
-            result = translated_prepare(context, desc);
+            if (prepare_has_native_only_flags(
+                    ((const struct prepare_desc_prefix *)desc)->flags))
+                result = FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
+            else
+                result = translated_prepare(context, desc);
             break;
         case FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION:
             result = translated_dispatch(context, desc);
@@ -600,6 +1038,7 @@ static ffxReturnCode_t dispatch_context(struct fg_context *context,
 static ffxReturnCode_t present_callback(ffxCallbackDescFrameGenerationPresent *desc,
                                        void *user)
 {
+    static LONG trace_count;
     struct callback_binding *binding = user;
     struct callback_scope scope;
     ffxReturnCode_t result;
@@ -609,6 +1048,10 @@ static ffxReturnCode_t present_callback(ffxCallbackDescFrameGenerationPresent *d
 
     enter_callback(&scope, binding->context);
     result = binding->present(desc, binding->present_user);
+    if (TRACE_ON(yaagl_fsr_fg) && desc->isGeneratedFrame &&
+        InterlockedIncrement(&trace_count) <= 120)
+        TRACE("MetalFX generated present frame=%llu result=%u\n",
+              (unsigned long long)desc->frameID, result);
     leave_callback(&scope);
     return result;
 }
@@ -616,6 +1059,7 @@ static ffxReturnCode_t present_callback(ffxCallbackDescFrameGenerationPresent *d
 static ffxReturnCode_t generation_callback(ffxDispatchDescFrameGeneration *desc,
                                           void *user)
 {
+    static LONG trace_count;
     struct callback_binding *binding = user;
     struct callback_scope scope;
     ffxReturnCode_t result;
@@ -639,7 +1083,16 @@ static ffxReturnCode_t generation_callback(ffxDispatchDescFrameGeneration *desc,
      * callback.  Suppress presentation of an unwritten interpolation target.
      */
     if (result != FFX_API_RETURN_OK) desc->numGeneratedFrames = 0;
+    if (TRACE_ON(yaagl_fsr_fg) && InterlockedIncrement(&trace_count) <= 120)
+        TRACE("MetalFX generation frame=%llu result=%u generated=%u\n",
+              (unsigned long long)desc->frameID, result, desc->numGeneratedFrames);
 
+    /*
+     * translated_dispatch establishes its native execution lease before it
+     * returns.  Retire only configurations older than the completed frame's
+     * fallback after the application callback has finished using them.
+     */
+    retire_frame_configs(binding->context, desc->frameID);
     leave_callback(&scope);
     return result;
 }
@@ -720,6 +1173,8 @@ static ffxReturnCode_t detach_swapchain(struct fg_context *context)
     free_memory(context_allocator(context), context->binding);
     context->binding = NULL;
     context->native_config_valid = FALSE;
+    release_resource(&context->hudless);
+    clear_frame_configs(context);
     context->enabled = FALSE;
     memset(&context->swapchain_config, 0, sizeof(context->swapchain_config));
     memset(&context->native_config, 0, sizeof(context->native_config));
@@ -734,12 +1189,38 @@ static ffxReturnCode_t configure_frame_generation(
     struct callback_binding *binding = NULL, *old_binding;
     FfxFrameGenerationConfig config;
     ffxReturnCode_t result;
+    BOOL newly_claimed = FALSE, binding_changed = FALSE;
+    const uint32_t known_flags = FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_TEAR_LINES |
+        FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_RESET_INDICATORS |
+        FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_VIEW |
+        FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY |
+        FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_PACING_LINES |
+        FFX_FRAMEGENERATION_FLAG_RESERVED_1 | FFX_FRAMEGENERATION_FLAG_RESERVED_2;
+    const uint32_t unsupported_generation_flags =
+        FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_TEAR_LINES |
+        FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_RESET_INDICATORS |
+        FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_VIEW |
+        FFX_FRAMEGENERATION_FLAG_RESERVED_1 | FFX_FRAMEGENERATION_FLAG_RESERVED_2;
     BOOL notify = !(desc->flags & FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY);
+    int64_t rect_right, rect_bottom;
+
+    if (desc->flags & ~known_flags) return FFX_API_RETURN_ERROR_PARAMETER;
+    if (desc->HUDLessColor.resource &&
+        desc->HUDLessColor.description.format != context->hudless_format)
+        return FFX_API_RETURN_ERROR_PARAMETER;
+    if (desc->generationRect.width || desc->generationRect.height)
+    {
+        rect_right = (int64_t)desc->generationRect.left + desc->generationRect.width;
+        rect_bottom = (int64_t)desc->generationRect.top + desc->generationRect.height;
+        if (desc->generationRect.left < 0 || desc->generationRect.top < 0 ||
+            desc->generationRect.width <= 0 || desc->generationRect.height <= 0 ||
+            rect_right > context->display_width || rect_bottom > context->display_height)
+            return FFX_API_RETURN_ERROR_PARAMETER;
+    }
 
     if (context->mode == MODE_PENDING)
     {
-        if (desc->header.pNext || desc->HUDLessColor.resource ||
-            (desc->flags & ~FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY))
+        if (desc->header.pNext || (desc->flags & unsupported_generation_flags))
         {
             result = select_native(context);
             if (result != FFX_API_RETURN_OK) return result;
@@ -748,9 +1229,7 @@ static ffxReturnCode_t configure_frame_generation(
         {
             if (notify && !desc->swapChain)
                 return FFX_API_RETURN_ERROR_PARAMETER;
-            context->native_config = *desc;
-            context->native_config.header.pNext = NULL;
-            context->native_config_valid = TRUE;
+            store_native_config(context, desc);
             return FFX_API_RETURN_OK;
         }
     }
@@ -758,19 +1237,23 @@ static ffxReturnCode_t configure_frame_generation(
     if (context->mode == CONTEXT_METALFX && desc->header.pNext)
         return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
 
-    /*
-     * UI extraction from an arbitrary HUD-less render target is not present
-     * in the fixed MetalFX packet contract.  Do not silently ignore it or
-     * start native interpolation in a translated context.
-     */
-    if (context->mode == CONTEXT_METALFX && desc->HUDLessColor.resource)
-        return FFX_API_RETURN_ERROR_PARAMETER;
+    if (context->mode == CONTEXT_METALFX &&
+        (desc->flags & unsupported_generation_flags))
+        return FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
 
     if (!notify)
     {
         if (context->mode == CONTEXT_NATIVE)
             return native.configure(&context->original, &desc->header);
-        return FFX_API_RETURN_OK;
+        result = snapshot_frame_config(context, desc);
+        if (result == FFX_API_RETURN_OK)
+        {
+            store_native_config(context, desc);
+            context->enabled = desc->frameGenerationEnabled;
+            if (!desc->frameGenerationEnabled) clear_frame_configs(context);
+            else keep_frame_config(context, desc->frameID);
+        }
+        return result;
     }
 
     if (!desc->swapChain) return FFX_API_RETURN_ERROR_PARAMETER;
@@ -798,29 +1281,39 @@ static ffxReturnCode_t configure_frame_generation(
 
     if (context->mode == CONTEXT_METALFX)
     {
-        binding = allocate_memory(context_allocator(context), sizeof(*binding));
-        if (!binding)
+        binding_changed = !binding_matches(context->binding, desc);
+        if (binding_changed)
         {
-            release_swapchain(swapchain);
-            return FFX_API_RETURN_ERROR_MEMORY;
-        }
+            binding = allocate_memory(context_allocator(context), sizeof(*binding));
+            if (!binding)
+            {
+                release_swapchain(swapchain);
+                return FFX_API_RETURN_ERROR_MEMORY;
+            }
 
-        memset(binding, 0, sizeof(*binding));
-        binding->context = context;
-        binding->present = desc->presentCallback;
-        binding->present_user = desc->presentCallbackUserContext;
-        binding->generate = desc->frameGenerationCallback;
-        binding->generate_user = desc->frameGenerationCallbackUserContext;
+            memset(binding, 0, sizeof(*binding));
+            binding->context = context;
+            binding->present = desc->presentCallback;
+            binding->present_user = desc->presentCallbackUserContext;
+            binding->generate = desc->frameGenerationCallback;
+            binding->generate_user = desc->frameGenerationCallbackUserContext;
+        }
+        else
+        {
+            binding = context->binding;
+        }
     }
 
     if (!context->swapchain)
     {
         if (!claim_swapchain(context, swapchain))
         {
-            free_memory(context_allocator(context), binding);
+            if (binding_changed)
+                free_memory(context_allocator(context), binding);
             release_swapchain(swapchain);
             return FFX_API_RETURN_ERROR_PARAMETER;
         }
+        newly_claimed = TRUE;
     }
     else
     {
@@ -833,9 +1326,7 @@ static ffxReturnCode_t configure_frame_generation(
         result = native.configure(&context->original, &desc->header);
         if (result == FFX_API_RETURN_OK)
         {
-            context->native_config = *desc;
-            context->native_config.header.pNext = NULL;
-            context->native_config_valid = TRUE;
+            store_native_config(context, desc);
             context->enabled = desc->frameGenerationEnabled;
             build_swapchain_config(&context->swapchain_config, desc, NULL);
         }
@@ -843,27 +1334,50 @@ static ffxReturnCode_t configure_frame_generation(
     }
 
     /*
-     * Mode was selected by the first successful Prepare, before any callback could be
-     * registered.  No call to the original FG provider occurs on this path.
+     * Publish the immutable frame snapshot before set_config, which may invoke
+     * the generation callback reentrantly.
      */
+    result = snapshot_frame_config(context, desc);
+    if (result != FFX_API_RETURN_OK)
+    {
+        if (binding_changed)
+            free_memory(context_allocator(context), binding);
+        if (newly_claimed)
+        {
+            clear_swapchain_claim(context);
+            release_swapchain(swapchain);
+        }
+        return result;
+    }
+
     build_swapchain_config(&config, desc, binding);
     old_binding = context->binding;
 
     /*
-     * Changing the binding pointer forces the official native implementation
-     * to drain the old callback configuration before installing the new one.
-     * It does so under its own presentation/configuration locks.
+     * The official native implementation drains only when a callback binding
+     * actually changes.  Reusing the immutable binding lets ordinary per-frame
+     * configuration remain deferred until Present instead of draining it here.
      */
     swapchain->lpVtbl->set_config(swapchain, &config);
     context->binding = binding;
     context->swapchain_config = config;
     context->enabled = desc->frameGenerationEnabled;
+    store_native_config(context, desc);
 
-    free_memory(context_allocator(context), old_binding);
+    if (binding_changed)
+        free_memory(context_allocator(context), old_binding);
 
-    if (!desc->frameGenerationEnabled &&
-        !swapchain->lpVtbl->wait_for_presents(swapchain))
-        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+    if (!desc->frameGenerationEnabled)
+    {
+        if (!swapchain->lpVtbl->wait_for_presents(swapchain))
+            return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+        clear_frame_configs(context);
+    }
+    else if (binding_changed)
+    {
+        /* The retired binding was drained; keep its last fallback and futures. */
+        retire_frame_configs(context, desc->frameID);
+    }
 
     return FFX_API_RETURN_OK;
 }
@@ -873,6 +1387,8 @@ static void free_context_storage(struct fg_context *context)
     ffxAllocationCallbacks allocation = context->allocation;
     BOOL custom = context->custom_allocation;
 
+    clear_frame_configs(context);
+    release_resource(&context->hudless);
     if (context->device) IUnknown_Release(context->device);
     DeleteCriticalSection(&context->dispatch_lock);
     free_memory(custom ? &allocation : NULL, context);
@@ -897,13 +1413,11 @@ static ffxReturnCode_t select_translation(
     create.flags = (desc->flags & FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED
                     ? YAAGL_FSR_FG_DEPTH_INVERTED : 0) |
                    (desc->flags & FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE
-                    ? YAAGL_FSR_FG_DEPTH_INFINITE : 0);
-    /* MetalFX has no equivalent for jittered/display-sized motion input or AMD debug views. */
-    if (desc->flags & ~(FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT |
-                        FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED |
-                        FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE |
-                        FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE))
-        return BRIDGE_INELIGIBLE;
+                    ? YAAGL_FSR_FG_DEPTH_INFINITE : 0) |
+                   (desc->flags & FFX_FRAMEGENERATION_ENABLE_DISPLAY_RESOLUTION_MOTION_VECTORS
+                    ? YAAGL_FSR_FG_DISPLAY_RESOLUTION_MOTION_VECTORS : 0) |
+                   (desc->flags & FFX_FRAMEGENERATION_ENABLE_MOTION_VECTORS_JITTER_CANCELLATION
+                    ? YAAGL_FSR_FG_MOTION_VECTORS_JITTERED : 0);
 
     result = bridge_call(&create);
     if (result != FFX_API_RETURN_OK)
@@ -1030,16 +1544,20 @@ ffxReturnCode_t WINAPI ffxCreateContext(ffxContext *output,
 
         if (!backend || !backend->device ||
             !fg->displaySize.width || !fg->displaySize.height ||
-            !fg->maxRenderSize.width || !fg->maxRenderSize.height)
+            !fg->maxRenderSize.width || !fg->maxRenderSize.height ||
+            fg->maxRenderSize.width > fg->displaySize.width ||
+            fg->maxRenderSize.height > fg->displaySize.height ||
+            (fg->flags & ~(FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT |
+                           FFX_FRAMEGENERATION_ENABLE_DISPLAY_RESOLUTION_MOTION_VECTORS |
+                           FFX_FRAMEGENERATION_ENABLE_MOTION_VECTORS_JITTER_CANCELLATION |
+                           FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED |
+                           FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE |
+                           FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE |
+                           FFX_FRAMEGENERATION_ENABLE_DEBUG_CHECKING)))
             return FFX_API_RETURN_ERROR_PARAMETER;
 
-        /*
-         * A distinct HUD-less format cannot be represented by the private
-         * create packet.  Leave this request to the native provider.
-         */
-        if (hudless && hudless->hudlessBackBufferFormat &&
-            hudless->hudlessBackBufferFormat != fg->backBufferFormat)
-            native_only = TRUE;
+        /* The native bridge validates actual HUD-less texture metadata. */
+        (void)hudless;
     }
 
     context = allocate_memory(callbacks, sizeof(*context));
@@ -1067,6 +1585,14 @@ ffxReturnCode_t WINAPI ffxCreateContext(ffxContext *output,
     else
     {
         context->device = backend->device;
+        context->display_width = fg->displaySize.width;
+        context->display_height = fg->displaySize.height;
+        context->max_render_width = fg->maxRenderSize.width;
+        context->max_render_height = fg->maxRenderSize.height;
+        context->hudless_format = hudless && hudless->hudlessBackBufferFormat ?
+            hudless->hudlessBackBufferFormat : fg->backBufferFormat;
+        context->debug_checking = !!(fg->flags & FFX_FRAMEGENERATION_ENABLE_DEBUG_CHECKING);
+        context->depth_infinite = !!(fg->flags & FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE);
         IUnknown_AddRef(context->device);
 
         context->mode = CONTEXT_NATIVE;
@@ -1183,6 +1709,44 @@ ffxReturnCode_t WINAPI ffxDestroyContext(ffxContext *handle,
     return detach_result;
 }
 
+static ffxReturnCode_t configure_debug(ffxContext *handle,
+                                        const struct ffxConfigureDescGlobalDebug1 *debug)
+{
+    struct fg_context *context = NULL;
+    ffxReturnCode_t result = FFX_API_RETURN_OK;
+
+    if (debug->header.pNext ||
+        (debug->debugLevel != FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_SILENCE &&
+         debug->debugLevel != FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_ERRORS &&
+         debug->debugLevel != FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_WARNINGS &&
+         debug->debugLevel != FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_VERBOSE))
+        return FFX_API_RETURN_ERROR_PARAMETER;
+
+    if (handle && !(context = acquire_context(handle)))
+        return FFX_API_RETURN_ERROR_PARAMETER;
+
+    if (have_native())
+        result = native.configure(context ? &context->original : NULL, &debug->header);
+    if (result == FFX_API_RETURN_OK)
+    {
+        AcquireSRWLockExclusive(&debug_lock);
+        if (context)
+        {
+            context->message = debug->fpMessage;
+            context->debug_level = debug->debugLevel;
+        }
+        else
+        {
+            global_message = debug->fpMessage;
+            global_debug_level = debug->debugLevel;
+        }
+        ReleaseSRWLockExclusive(&debug_lock);
+    }
+
+    if (context) release_context(context);
+    return result;
+}
+
 ffxReturnCode_t WINAPI ffxConfigure(ffxContext *handle,
                                    const ffxConfigureDescHeader *desc)
 {
@@ -1191,6 +1755,8 @@ ffxReturnCode_t WINAPI ffxConfigure(ffxContext *handle,
 
     if (!desc || !valid_chain(desc)) return FFX_API_RETURN_ERROR_PARAMETER;
     if (in_callback()) return FFX_API_RETURN_ERROR_PARAMETER;
+    if (desc->type == FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG1)
+        return configure_debug(handle, (const void *)desc);
 
     if (!handle)
     {
@@ -1236,6 +1802,8 @@ ffxReturnCode_t WINAPI ffxConfigure(ffxContext *handle,
     }
     ReleaseSRWLockExclusive(&context->configure_lock);
 
+    if (result != FFX_API_RETURN_OK)
+        report_validation(context, L"Invalid or unsupported frame-generation configuration.");
     release_context(context);
     return result;
 }
@@ -1359,12 +1927,18 @@ ffxReturnCode_t WINAPI ffxDispatch(ffxContext *handle,
      * Waiting from a presenter callback would wait for itself.  Normal
      * Prepare/Dispatch callback reentry is required and remains permitted.
      */
-    if (in_callback() &&
-        desc->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_WAIT_FOR_PRESENTS_DX12)
-        result = FFX_API_RETURN_ERROR_PARAMETER;
-    else
-        result = dispatch_context(context, desc);
+    result = validate_public_dispatch(context, desc);
+    if (result == FFX_API_RETURN_OK)
+    {
+        if (in_callback() &&
+            desc->type == FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_WAIT_FOR_PRESENTS_DX12)
+            result = FFX_API_RETURN_ERROR_PARAMETER;
+        else
+            result = dispatch_context(context, desc);
+    }
 
+    if (result != FFX_API_RETURN_OK)
+        report_validation(context, L"Invalid or unsupported frame-generation dispatch.");
     release_context(context);
     return result;
 }

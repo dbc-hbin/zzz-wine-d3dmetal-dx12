@@ -110,7 +110,50 @@ python3 scripts/stage-runtime.py --verify-runtime <private-wine> --current-sourc
 
 스테이징은 설치된 원본 `amd_fidelityfx_framegeneration_dx12.dll`을 수정하지 않고 읽어 고정 SHA-256, x86-64 PE 아키텍처와 5개 export를 검증한 뒤, 비-canonical private 이름 `amd_fidelityfx_framegeneration_dx12_native.dll`로 읽기 전용 복사합니다. proxy는 그 sibling의 정확한 절대 경로만 로드하므로 canonical 재귀 로드를 막습니다. manifest에는 원본 provenance와 서명된 산출물 hash가 기록됩니다. `WINEDLLOVERRIDES`는 canonical upscaler 및 frame-generation builtin만 선택하고 loader나 이름을 바꾼 native fallback은 override하지 않습니다.
 
+Frame interpolation은 macOS 26 이상에서 실제 command-buffer mode에 맞춰 선택합니다. legacy는 Apple의 `supportsDevice:`와 device-only factory를, Metal4는 `supportsMetal4FX:`와 compiler factory를 사용하며 두 mode의 command buffer를 섞지 않습니다. 번역을 선택하기 전 matching-mode 지원이나 native-only 입력이 맞지 않으면 원본 FSR provider를 선택할 수 있지만, MetalFX 작업을 기록한 뒤에는 같은 frame을 native로 다시 보간하지 않고 명시적 오류를 반환합니다.
+
+원본 FSR swapchain은 swapchain 생성/wrapping, presentation timing, 등록된 UI resource, custom present callback, pacing 및 위임된 swapchain query를 계속 소유합니다. Prepare는 caller command list에서 depth와 motion을 snapshot하고, interpolation은 private previous-color history를 유지한 뒤 제공된 interpolation command list에 결과를 기록합니다. HUD-less 입력에서는 HUD-less resource를 MetalFX scene color로, UI가 합성된 presentation color를 composited UI 관계로 전달합니다. 별도로 등록된 swapchain UI는 원본 post-composition 경로에 남아 MetalFX에 중복 제출되지 않습니다. frame별 HUD-less resource는 비동기 Configure/Prepare/Dispatch가 끝날 때까지 보존합니다.
+
+Display-resolution 및 jittered motion vector는 고정 FidelityFX 규약의 정규화와 jitter-cancellation 부호로 처리합니다. Prepare V1은 CameraInfo를 생략하거나 단일 optional extension으로 제공할 수 있고, V2는 camera 정보를 직접 포함합니다. frame ID가 연속적이지 않거나 reset이 명시되면 history를 reset합니다. generation rectangle은 signed 좌표를 유지하며 width와 height가 모두 0일 때만 full display가 기본값입니다. partial rectangle의 좌상단은 depth/motion 좌표 (0,0)에 대응합니다. sRGB, PQ, scRGB transfer와 luminance 변환을 지원하고 유한하지 않거나 잘못된 범위는 거부합니다. distortion field, AMD debug shader view/tear/reset overlay, custom DX12 backend allocation callback, MetalFX 경로의 2개 이상 generated output, 정확한 translated GPU memory accounting은 지원하지 않습니다. MetalFX 선택 전에는 안전한 경우 원본 provider로 보내고, 선택 후에는 조용히 무시하지 않고 오류를 반환합니다.
+
+Prepare는 활성 depth/motion의 원본 snapshot을 보존하고, generation은 전체 입력 영역을 rectangle 크기의 MetalFX 입력으로 정규화합니다. display 크기로 확대한 중간 텍스처를 일부만 잘라 쓰지 않습니다. Metal4 compute parameter buffer는 encode 전에 residency에 포함합니다. configuration cache는 최대 8개이며 luminance·rectangle 원점 변경은 factory 재생성 없이 history를 reset합니다. cache에서 제거된 configuration도 진행 중 작업이 완료될 때까지 보존합니다.
+
+프레임 생성 Prepare는 고정 SDK의 camera 기본값 처리를 따릅니다. 유한한 `viewSpaceToMetersFactor ≤ 0`은 배율 `1.0`으로 처리하고, context 생성 시 무한 깊이를 선택했다면 사용하지 않는 `cameraFar`는 검사하지 않습니다. 유한 깊이 모드의 두 plane은 양수·유한·서로 다른 값이어야 하며, MetalFX와 투영행렬에 전달하기 전에 min/max로 순서를 정규화합니다. reversed depth는 별도 flag로 유지하므로 `cameraNear=5000`, `cameraFar=0.1`도 depth texture를 반전하지 않고 처리합니다. 유한하지 않은 scale은 계속 거부합니다. Prepare V1과 V2 모두 같은 규칙을 사용합니다.
+
+FG 실패 로그는 횟수를 제한하여 operation/stage와 입력 요약을 남깁니다. `YAAGL_FSR_LOG=<절대 경로>`는 첫 MetalFX encode의 실제 command mode와 정규화한 plane을 기록합니다(무한 깊이는 `farPlane: null`). 선택적 `WINEDEBUG=trace+yaagl_fsr_fg`는 generation과 생성 프레임의 present callback 결과를 각각 최대 120회 기록합니다. 이 기록은 encode/callback 진행을 나타내며 GPU 완료나 성능 측정의 증거는 아닙니다.
+
+게임을 실행하지 않는 자체 검증 명령은 다음과 같습니다. 실제 Metal4와 legacy command-buffer mode를 각각 지정합니다.
+
+```bash
+python3 scripts/test-metalfx-native.py --out <native-evidence>
+python3 scripts/test-fsr-launch-profile.py
+python3 scripts/test-fsr-translator.py --runtime <private-wine> --out <upscaler-evidence>
+python3 scripts/test-fsr-translator.py --frame-generation --command-buffer metal4 \
+  --runtime <private-wine> --out <fg-metal4-evidence>
+python3 scripts/test-fsr-translator.py --frame-generation --command-buffer legacy \
+  --runtime <private-wine> --out <fg-legacy-evidence>
+```
+
+격리된 FG smoke는 실제 Metal4와 legacy mode에서 모두 통과했습니다. moving-pattern midpoint GPU readback, CameraInfo가 없거나 extension으로 제공되는 Prepare V1, camera가 내장된 Prepare V2, 명시적 reset과 frame-ID gap, pending 상태의 오류 거부 후 provider 선택 유지, display-resolution/jittered motion vector, signed partial rectangle, HUD-less scene/UI 합성, sRGB/PQ/scRGB transfer, native override/fallback, create-time debug checking callback, 70개 disabled frame 뒤 interpolation callback과 destroy 전 present drain을 확인합니다. 이 검증은 게임을 실행하지 않았으며 game-specific 화질이나 검증하지 않은 구형 하드웨어 지원을 입증하지 않습니다.
+
 모든 Mac에서 temporal scaling은 시스템 기본 MetalFX 모델을 사용합니다. 비공개 BBR 강제, BBR fallback 정책 및 V4 모델 override는 사용하지 않습니다. FSR API adapter는 고정된 provider의 null-output query 성공 no-op 동작을 따르며, raw COM tear-off 포인터 비교가 아니라 `ID3D12Device::GetAdapterLuid`로 논리 D3D12 device를 식별합니다. command list와 모든 resource는 같은 adapter LUID를 보고해야 합니다. 이는 현재 단일-adapter 실행본 검증이며 실제 multi-adapter 하드웨어 검증은 아닙니다. 이 번역기는 AMD FSR4 신경망이 아니라 MetalFX를 실행합니다. Ultra Performance에서 요청 출력이 MetalFX temporal 최대 3배를 초과할 때만 caller의 출력 texture는 유지하고 단일 배율 `s = min(device 최대 배율, 출력 너비 / 입력 너비, 출력 높이 / 입력 높이)`을 구하고 MetalFX 크기를 `floor(입력 너비 × s)` × `floor(입력 높이 × s)`로 계산해 중앙 배치하며 남는 여백을 검게 지웁니다(홀수 나머지 1픽셀은 반대쪽 여백에 둡니다). 이 계산은 1080p·1440p·4K·홀수 크기 출력과 실행 중 해상도 변경에 동적으로 적용됩니다. 예를 들어 1248×696 입력과 3840×2160 출력에서는 MetalFX를 3744×2088로 실행해 (48,36)에 배치하고 좌우 48픽셀·상하 36픽셀을 검은 여백으로 둡니다. 실제 물리 모니터 검증은 현재 4K 디스플레이에서만 수행했으며, 1080p·1440p·홀수 크기·해상도 전환은 GPU/backend 시나리오 검증이지 다른 물리 모니터 검증 주장이 아닙니다. 입력 크기 조절 UI나 추가 spatial scaling pass는 만들지 않으며, 3배 이하 dispatch는 기존 full-frame 경로를 그대로 사용합니다. 기존 배포·설치본은 자동으로 갱신되지 않으므로 반드시 별도 복사본만 stage·실행합니다.
+
+업스케일링은 현재 활성 입력/출력보다 큰 backing texture를 허용합니다. MetalFX에는 활성 크기와 일치하는 resource를 전달하며 필요한 경우에만 GPU staging을 사용하고, caller의 활성 출력 영역 밖 texel은 보존합니다. 저해상도와 출력 해상도 motion vector 모두 같은 규칙을 따릅니다. sharpening이 꺼져 있으면 `[0,1]` 범위의 유한한 sharpness가 남아 있어도 RCAS 없이 처리합니다. jitter phase query는 고정 SDK처럼 소수부를 버리고(1600→2000은 12), null dispatch descriptor는 `FFX_API_RETURN_ERROR_PARAMETER`를 반환합니다.
+
+#### 남아 있는 프레임 생성 검증 경계
+
+**P2 수정:** swapchain에 알리는 Configure 호출은 앱의 callback 함수와 user context가 같으면 불변 binding을 재사용하여 불필요한 present drain을 피합니다. 실제 callback 변경 시에는 native swapchain을 통해 이전 binding을 안전하게 회수하며, 일반 Configure 호출 중에는 처리 대기 중인 frame별 HUD-less snapshot을 보존합니다. 이는 pacing과 수명 관리 수정이지, 측정된 FPS나 화질 개선을 뜻하지 않습니다. 아래 항목은 아직 검증하지 않은 위험입니다.
+
+실제 DXGI 회귀 검증은 실행 중인 generation callback을 잠시 보류한 채 다음 frame 설정을 제출하고, callback이 같으면 해당 frame을 drain하지 않고 Configure가 끝나야 함을 확인합니다. callback 교체와 대기 중인 HUD-less resource 수명도 정상 상태의 GPU midpoint readback으로 검증합니다. 동일한 fixture가 기존 런타임의 불필요한 drain을 재현하고 수정된 Metal4·legacy 런타임에서는 통과합니다. reset·warm-up frame을 정상 상태의 보간 결과로 오판하지 않습니다.
+
+- 현재 합성 검증은 균일한 depth와 하나의 global motion vector를 사용합니다. disocclusion이나 전경/배경의 혼합 motion은 다루지 않으며, 게임에서 관찰된 2256×1272 render-resolution motion vector가 3840×2160 출력으로 전달되는 조건도 재현하지 않습니다.
+- 현재 depth와 motion vector는 보간 전에 nearest sampling으로 확대합니다. 이 방식과 MetalFX에 native 저해상도 입력을 직접 주는 방식 중 어느 쪽이 나은지는 A/B 비교가 필요하며, 알려진 화질 버그로 확정된 것은 아닙니다.
+- descriptor의 nullable `scaler`는 연결하지 않습니다. Apple WWDC25 session 211의 8:35 샘플은 scaler를 연결하지만, 이는 아키텍처 차이일 뿐 현재 경로의 화질 결함을 입증하지 않습니다.
+- 입력 color가 이미 temporal upscale된 경우 jitter 단위는 아직 확인되지 않았습니다. 근거 없이 jitter를 재배율하거나 0으로 바꾸지 말고, 먼저 producer가 실제로 사용하는 규약을 캡처한 뒤 시간적으로 안정된 장면에서 비교해야 합니다.
+- 4K에서 RGBA16F, R32F, RG16F texture 크기로 계산한 Generate 1회당 논리적 scratch 할당량은 UI 없을 때 약 190 MiB, UI가 있을 때 약 253 MiB입니다. 이는 논리적 할당 크기이며 측정된 resident memory, bandwidth, latency 또는 frame-time 비용이 아닙니다.
+- generation과 생성 프레임 present 로그는 각각 callback 120회에서 중단되며, 게임 frame 120개를 뜻하지 않습니다. OFF 전환이나 그 이후 생성 중단을 기록하지 않으므로 이를 입증할 수 없고, HUD 표시가 남는 것 역시 생성이 계속된다는 증거는 아닙니다.
+
+다음 검증은 2256×1272→3840×2160 조건에서 disocclusion과 혼합 motion이 있는 게임 캡처, nearest 확대 입력과 native 저해상도 depth/MV 입력의 A/B 비교, 실제 jitter 규약 기록, resident memory 및 GPU 시간 profiling, callback 로그 제한 이후에도 OFF 전환과 후속 생성 동작을 명시적으로 관찰하는 과정을 포함해야 합니다. 이 검증이 끝나기 전에는 FPS나 화질을 보장하지 않습니다.
 
 #### 실험적 NGX 노출 보정 및 진단
 

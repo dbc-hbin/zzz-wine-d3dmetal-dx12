@@ -61,9 +61,8 @@ void* observeEncodeBegin(const EncodeObservation& observation) noexcept {
             "immutable transport identity reaches observer unchanged");
     id<MTLFXTemporalScalerBase> scaler =
         reinterpret_cast<id<MTLFXTemporalScalerBase>>(observation.scaler);
-    require(reinterpret_cast<void*>(scaler.colorTexture) == observation.callerTextures.color &&
-            observation.callerTextures.output == observation.frame->output,
-            "observer distinguishes native input and original caller output");
+    require(observation.callerTextures.output == observation.frame->output,
+            "observer receives the original caller output");
     require(scaler.inputContentWidth == observation.frame->inputContent.width &&
             closeFloat(scaler.jitterOffsetX, observation.frame->jitterOffsetX.value) &&
             closeFloat(scaler.preExposure, observation.frame->preExposure.value),
@@ -541,12 +540,9 @@ TextureSet makeTextureSet(Resources& resources) {
     };
 }
 
-void verifyDescriptorCapture(const FactoryCapture& capture, CommandMode mode,
-                             NSUInteger capacity) {
+void verifyDescriptorCapture(const FactoryCapture& capture, CommandMode mode) {
     require(capture.scaler != nil, "captured scaler exists");
     require(capture.metal4 == (mode == CommandMode::Metal4), "captured factory mode");
-    require(capture.inputWidth == capacity && capture.inputHeight == capacity,
-            "descriptor uses actual resolved input capacity");
     require(capture.outputWidth == kOutput && capture.outputHeight == kOutput,
             "descriptor output dimensions");
     require(capture.synchronous, "descriptor requests synchronous MetalFX initialization");
@@ -558,12 +554,8 @@ void verifyDescriptorCapture(const FactoryCapture& capture, CommandMode mode,
     }
 }
 
-void verifyScalerFrame(id captured, Resources& resources, const FrameInfo& frame,
-                       bool sharedOutput) {
+void verifyScalerFrame(id captured, const FrameInfo& frame) {
     id<MTLFXTemporalScalerBase> scaler = reinterpret_cast<id<MTLFXTemporalScalerBase>>(captured);
-    require(scaler.colorTexture == resources.color, "exact color view preserved");
-    require(scaler.depthTexture == resources.depth, "exact depth view preserved");
-    require(scaler.motionTexture == resources.motion, "exact motion view preserved");
     require(scaler.inputContentWidth == frame.inputContent.width &&
             scaler.inputContentHeight == frame.inputContent.height,
             "dynamic input content captured");
@@ -574,27 +566,10 @@ void verifyScalerFrame(id captured, Resources& resources, const FrameInfo& frame
             closeFloat(scaler.motionVectorScaleY, frame.motionVectorScaleY.value),
             "motion scale captured without rewrite");
     require(closeFloat(scaler.preExposure, frame.preExposure.value), "preExposure preserved");
-    if (@available(macOS 27.0, *)) {
-        require(scaler.colorContentOffsetX == frame.colorRect.x &&
-                scaler.colorContentOffsetY == frame.colorRect.y &&
-                scaler.depthContentOffsetX == frame.depthRect.x &&
-                scaler.depthContentOffsetY == frame.depthRect.y &&
-                scaler.motionContentOffsetX == frame.motionRect.x &&
-                scaler.motionContentOffsetY == frame.motionRect.y &&
-                scaler.outputOffsetX == frame.outputRect.x &&
-                scaler.outputOffsetY == frame.outputRect.y,
-                "all public MetalFX content/output offsets captured");
-    }
     require(scaler.exposureTexture != nil &&
             scaler.exposureTexture.pixelFormat == MTLPixelFormatR16Float &&
             scaler.exposureTexture.width == 1 && scaler.exposureTexture.height == 1,
             "manual exposure converted to documented MetalFX R16Float texture");
-    require(scaler.outputTexture != nil && scaler.outputTexture.storageMode == MTLStorageModePrivate,
-            "MetalFX always receives Private output storage");
-    if (sharedOutput)
-        require(scaler.outputTexture != resources.output, "Shared caller output uses a private execution shadow");
-    else
-        require(scaler.outputTexture == resources.output, "compatible Private caller output is used directly");
 }
 
 struct LegacyRunner {
@@ -745,7 +720,7 @@ CaseResult runCase(id<MTLDevice> device, id compiler, id<MTLCommandQueue> transf
         if (frameIndex == 0) {
             require(captureCount() == captureBase + 1, "first frame created exactly one scaler generation");
             FactoryCapture capture = captureAt(captureBase);
-            verifyDescriptorCapture(capture, mode, resources.capacity);
+            verifyDescriptorCapture(capture, mode);
             firstScaler = capture.scaler;
             installScalerObservers(firstScaler);
         } else {
@@ -754,7 +729,7 @@ CaseResult runCase(id<MTLDevice> device, id compiler, id<MTLCommandQueue> transf
 
         auto lease = runPrepared(mode, legacy.get(), metal4.get(), prepared, &error);
         require(lease != nullptr, "completed execution lease retained by caller");
-        verifyScalerFrame(firstScaler, resources, frame, sharedOutput);
+        verifyScalerFrame(firstScaler, frame);
         bool observedReset = false;
         bool observedDepth = false;
         require(observedBool(firstScaler, &gObservedResetKey, observedReset) &&
@@ -825,33 +800,32 @@ CaseResult runCase(id<MTLDevice> device, id compiler, id<MTLCommandQueue> transf
                     "deterministic replay uses explicit reset only on first frame");
         }
 
-        // A real backing-capacity change creates exactly one new scaler
-        // generation; dynamic input content remains 64x64.
+        // Changing only caller backing capacity must preserve the active-size
+        // scaler generation and its temporal history.
         Resources resized = makeResources(device, 96, outputStorage);
         fillInputs(resized, 0);
         writeRGBA8(device, transfer, resized.output, sentinelBytes());
         FrameInfo resizedFrame = makeFrame(resized, 0, false);
         auto resizedPrepared = feature->prepare(resizedFrame, makeTextureSet(resized), &error);
         require(resizedPrepared != nullptr, error.message.empty() ? "resize preparation" : error.message.c_str());
-        require(captureCount() == captureBase + 3, "backing-capacity resize creates one new scaler generation");
-        FactoryCapture resizedCapture = captureAt(captureBase + 2);
-        verifyDescriptorCapture(resizedCapture, mode, resized.capacity);
-        require(resizedCapture.scaler != firstScaler, "resize generation has a distinct scaler history object");
-        installScalerObservers(resizedCapture.scaler);
+        require(captureCount() == captureBase + 2,
+                "backing-capacity-only resize preserves scaler generation");
         auto resizedLease = runPrepared(mode, legacy.get(), metal4.get(), resizedPrepared, &error);
-        require(resizedLease != nullptr, "resize execution lease");
-        require(resizedLease->effectiveReset() && !resizedLease->generationInitialized(),
-                "resized generation initializes history even when caller reset=false");
-        verifyScalerFrame(resizedCapture.scaler, resized, resizedFrame, sharedOutput);
-        const auto resizedBytes = readRGBA8(device, transfer, resized.output);
+        require(resizedLease != nullptr && resizedLease->scaler() == reinterpret_cast<void*>(firstScaler),
+                "resize execution reuses active-size scaler");
+        require(!resizedLease->effectiveReset() && resizedLease->generationInitialized(),
+                "backing-capacity-only resize preserves temporal history");
+        verifyScalerFrame(firstScaler, resizedFrame);
+        verifyOutputSentinel(readRGBA8(device, transfer, resized.output),
+                             resized.output.width, resized.output.height);
 
-        // Preparing another frame against the resized backing keeps the new
-        // generation, while replaying an old PreparedFrame keeps its old one.
+        // Preparing another frame against the resized backing and replaying an
+        // earlier PreparedFrame both retain the same active-size generation.
         fillInputs(resized, 1);
         FrameInfo resizedFrame1 = makeFrame(resized, 1, false);
         auto resizedPrepared1 = feature->prepare(resizedFrame1, makeTextureSet(resized), &error);
-        require(resizedPrepared1 != nullptr && captureCount() == captureBase + 3,
-                "same resized backing preserves new generation");
+        require(resizedPrepared1 != nullptr && captureCount() == captureBase + 2,
+                "same resized backing preserves active-size generation");
         auto resizedLease1 = runPrepared(mode, legacy.get(), metal4.get(), resizedPrepared1, &error);
         require(resizedLease1 != nullptr, "second resized execution");
         require(!resizedLease1->effectiveReset() && resizedLease1->generationInitialized(),
@@ -859,26 +833,13 @@ CaseResult runCase(id<MTLDevice> device, id compiler, id<MTLCommandQueue> transf
 
         require(replayPrepared != nullptr, "old generation replay frame retained");
         auto oldReplayLease = runPrepared(mode, legacy.get(), metal4.get(), replayPrepared, &error);
-        require(oldReplayLease != nullptr && captureCount() == captureBase + 3,
-                "old recorded frame replays its captured generation without factory mutation");
+        require(oldReplayLease != nullptr && captureCount() == captureBase + 2,
+                "old recorded frame replays without factory mutation");
         id<MTLFXTemporalScalerBase> oldScaler =
             reinterpret_cast<id<MTLFXTemporalScalerBase>>(firstScaler);
         require(closeFloat(oldScaler.jitterOffsetX, -0.25f),
                 "old prepared frame still targets old history generation");
 
-        Resources resizeReference = makeResources(device, resized.capacity, outputStorage);
-        fillInputs(resizeReference, 0);
-        writeRGBA8(device, transfer, resizeReference.output, sentinelBytes());
-        auto resizeReferenceFeature = Feature::create(context, create, &error);
-        require(resizeReferenceFeature != nullptr, "resize explicit-reset reference feature");
-        auto resizeReferencePrepared = resizeReferenceFeature->prepare(
-            makeFrame(resizeReference, 0, true), makeTextureSet(resizeReference), &error);
-        require(resizeReferencePrepared != nullptr, "resize explicit-reset reference preparation");
-        auto resizeReferenceLease = runPrepared(
-            mode, legacy.get(), metal4.get(), resizeReferencePrepared, &error);
-        require(resizeReferenceLease != nullptr, "resize explicit-reset reference execution");
-        require(readRGBA8(device, transfer, resizeReference.output) == resizedBytes,
-                "resized caller-reset=false generation matches explicit-reset=true reference");
 
         // Preparation failure happens before recording and leaves output bytes
         // untouched. This also covers the exact unsupported Exposure.Scale case.
@@ -891,18 +852,23 @@ CaseResult runCase(id<MTLDevice> device, id compiler, id<MTLCommandQueue> transf
         auto staleBytes = readRGBA8(device, transfer, resources.output);
         require(staleBytes == sentinelBytes(), "failed preparation leaves output completely stale/untouched");
 
-        // SDK27 requires the depth backing dimensions to equal the color
-        // backing dimensions. Keep the subrect itself valid so this isolates
-        // backing-capacity validation rather than rect bounds.
+        // Color and depth may have different backing capacities when both active
+        // rectangles fit. The normalized dispatch must still update only the active output.
         id<MTLTexture> narrowDepth = makeTexture(
             device, MTLPixelFormatR32Float, resources.capacity - 8, resources.capacity,
             MTLStorageModeShared, MTLTextureUsageShaderRead);
-        FrameInfo badDepthFrame = makeFrame(resources, 0, false);
-        TextureSet badDepthTextures = makeTextureSet(resources);
-        badDepthTextures.depth = reinterpret_cast<void*>(narrowDepth);
-        auto badDepthPrepared = feature->prepare(badDepthFrame, badDepthTextures, &error);
-        require(badDepthPrepared == nullptr && error.code == ErrorCode::IncompatibleTexture,
-                "depth backing capacity mismatch fails synchronously even when depth rect fits");
+        FrameInfo narrowDepthFrame = makeFrame(resources, 0, false);
+        TextureSet narrowDepthTextures = makeTextureSet(resources);
+        narrowDepthTextures.depth = reinterpret_cast<void*>(narrowDepth);
+        auto narrowDepthPrepared = feature->prepare(narrowDepthFrame, narrowDepthTextures, &error);
+        require(narrowDepthPrepared != nullptr,
+                error.message.empty() ? "independent depth backing preparation" : error.message.c_str());
+        auto narrowDepthLease = runPrepared(
+            mode, legacy.get(), metal4.get(), narrowDepthPrepared, &error);
+        require(narrowDepthLease != nullptr,
+                error.message.empty() ? "independent depth backing execution" : error.message.c_str());
+        verifyOutputSentinel(readRGBA8(device, transfer, resources.output),
+                             resources.output.width, resources.output.height);
         [narrowDepth release];
     }
 
@@ -977,14 +943,23 @@ void testFsrOperationsMetal4(id<MTLDevice> device, id<MTL4Compiler> compiler,
 
     writeRGBA8(device, transfer, resources.output, sentinelBytes());
     operations.sharpening = false;
-    operations.sharpness = 0.0f;
+    operations.sharpness = 0.5f;
     prepared = feature->prepare(frame, textures, &error, operations);
-    require(prepared != nullptr, error.message.empty() ? "RCAS-disabled prepare" : error.message.c_str());
+    require(prepared != nullptr, error.message.empty() ? "RCAS-disabled nonzero prepare" : error.message.c_str());
     lease = runner.run(prepared, &error);
-    require(lease != nullptr, error.message.empty() ? "RCAS-disabled encode" : error.message.c_str());
+    require(lease != nullptr, error.message.empty() ? "RCAS-disabled nonzero encode" : error.message.c_str());
     const std::vector<unsigned char> unsharpened = readRGBA8(device, transfer, resources.output);
     require(unsharpened != sentinelBytes(), "RCAS-disabled path replaces caller output sentinel");
     require(unsharpened != sharpened, "RCAS enabled and disabled outputs differ observably");
+
+    writeRGBA8(device, transfer, resources.output, sentinelBytes());
+    operations.sharpness = 0.0f;
+    prepared = feature->prepare(frame, textures, &error, operations);
+    require(prepared != nullptr, error.message.empty() ? "RCAS-disabled zero prepare" : error.message.c_str());
+    lease = runner.run(prepared, &error);
+    require(lease != nullptr, error.message.empty() ? "RCAS-disabled zero encode" : error.message.c_str());
+    require(readRGBA8(device, transfer, resources.output) == unsharpened,
+            "disabled sharpening ignores the stored in-range sharpness value");
 
     writeRGBA8(device, transfer, resources.output, sentinelBytes());
     operations.colorTransfer = ColorTransfer::PQ;
@@ -999,6 +974,58 @@ void testFsrOperationsMetal4(id<MTLDevice> device, id<MTL4Compiler> compiler,
     [composition release];
     [reactive release];
     std::puts("FSR_OPERATIONS_PASS transfer=srgb+pq mask=max rcas=off+on exposure=preserved");
+}
+
+
+void testDisplayResolutionMotionMetal4(id<MTLDevice> device, id<MTL4Compiler> compiler,
+                                       id<MTLCommandQueue> transfer) API_AVAILABLE(macos(26.0)) {
+    CreateInfo create = makeCreateInfo();
+    create.featureFlags.value &= ~static_cast<std::uint32_t>(FeatureFlagMVLowRes);
+    Error error;
+    auto feature = Feature::create(
+        {reinterpret_cast<void*>(device), reinterpret_cast<void*>(compiler), CommandMode::Metal4},
+        create, &error);
+    require(feature != nullptr,
+            error.message.empty() ? "display-resolution motion feature" : error.message.c_str());
+
+    Resources resources = makeResources(device, 80, MTLStorageModeShared);
+    fillInputs(resources, 2);
+    [resources.motion release];
+    resources.motion = makeTexture(device, MTLPixelFormatRG16Float,
+                                   kOutputBacking, kOutputBacking,
+                                   MTLStorageModeShared, MTLTextureUsageShaderRead);
+    std::vector<_Float16> motion(kOutputBacking * kOutputBacking * 2, _Float16(0));
+    [resources.motion replaceRegion:MTLRegionMake2D(0, 0, kOutputBacking, kOutputBacking)
+                         mipmapLevel:0 withBytes:motion.data()
+                         bytesPerRow:kOutputBacking * sizeof(_Float16) * 2];
+    writeRGBA8(device, transfer, resources.output, sentinelBytes());
+
+    FrameInfo frame = makeFrame(resources, 2, true);
+    frame.motionRect = frame.outputRect;
+    TextureSet textures = makeTextureSet(resources);
+    const std::size_t captureBase = captureCount();
+    auto prepared = feature->prepare(frame, textures, &error);
+    require(prepared != nullptr,
+            error.message.empty() ? "display-resolution motion prepare" : error.message.c_str());
+    Metal4Runner runner(device);
+    auto lease = runner.run(prepared, &error);
+    require(lease != nullptr,
+            error.message.empty() ? "display-resolution motion encode" : error.message.c_str());
+
+    FactoryCapture capture = captureAt(captureBase);
+    require(capture.inputWidth == kContent && capture.inputHeight == kContent &&
+            capture.outputWidth == kOutput && capture.outputHeight == kOutput,
+            "display-resolution motion descriptor uses active dimensions");
+    if (@available(macOS 27.0, *))
+        require(capture.outputMotion, "display-resolution motion mode reaches MetalFX");
+    id<MTLFXTemporalScalerBase> scaler =
+        reinterpret_cast<id<MTLFXTemporalScalerBase>>(capture.scaler);
+    require(scaler.motionTexture != resources.motion &&
+            scaler.motionTexture.width == kOutput && scaler.motionTexture.height == kOutput,
+            "display-resolution motion active rect is normalized into exact scratch");
+    verifyOutputSentinel(readRGBA8(device, transfer, resources.output),
+                         resources.output.width, resources.output.height);
+    std::puts("DISPLAY_RESOLUTION_MOTION_PASS input=64x64 motion=128x128 output=128x128 backing=140x140");
 }
 
 void testFeatureReleaseBeforeSubmitMetal4(id<MTLDevice> device, id<MTL4Compiler> compiler,
@@ -1391,6 +1418,7 @@ int main() {
                 require(metal4Shared.hashes == metal4Private.hashes,
                         "Metal4 observed Shared and unobserved Private outputs are pixel-identical");
                 testFsrOperationsMetal4(device, compiler, transfer);
+                testDisplayResolutionMotionMetal4(device, compiler, transfer);
                 releaseCaptures();
                 testExactScaleCapGpu(device, transfer);
                 testFeatureReleaseBeforeSubmitMetal4(device, compiler, transfer);

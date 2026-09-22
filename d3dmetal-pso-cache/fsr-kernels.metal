@@ -163,3 +163,86 @@ kernel void yaagl_fsr_finish(
     color.rgb = forward_transfer(color.rgb, params.transfer);
     destination.write(color, destinationPosition);
 }
+
+// Frame interpolation performs transfer conversion in an RGBA16Float scene domain.
+struct YaaglFgParams {
+    int2 sourceOrigin;
+    uint2 extent;
+    uint2 sourceExtent;
+    uint2 motionTargetExtent;
+    uint2 outputExtent;
+    float2 motionScale;
+    float2 jitterCancellation;
+    float minLuminance;
+    float maxLuminance;
+    uint transfer;
+};
+
+static float3 fg_decode(float3 value, constant YaaglFgParams& params) {
+    if (params.transfer == 0u) return inverse_srgb(value);
+    if (params.transfer == 1u)
+        return inverse_pq(value) * (10000.0f / params.maxLuminance);
+    float low = params.minLuminance / 80.0f;
+    float range = (params.maxLuminance - params.minLuminance) / 80.0f;
+    return (value - low) / range;
+}
+
+static float3 fg_encode(float3 value, constant YaaglFgParams& params) {
+    if (params.transfer == 0u) return forward_srgb(value);
+    if (params.transfer == 1u)
+        return forward_pq(value * (params.maxLuminance / 10000.0f));
+    float low = params.minLuminance / 80.0f;
+    float range = (params.maxLuminance - params.minLuminance) / 80.0f;
+    return value * range + low;
+}
+
+kernel void yaagl_fg_decode_crop(
+    texture2d<float, access::read> source [[texture(0)]],
+    texture2d<float, access::write> destination [[texture(1)]],
+    constant YaaglFgParams& params [[buffer(0)]],
+    uint2 tid [[thread_position_in_grid]]) {
+    if (any(tid >= params.extent)) return;
+    float4 color = source.read(uint2(params.sourceOrigin) + tid);
+    color.rgb = fg_decode(color.rgb, params);
+    destination.write(color, tid);
+}
+
+kernel void yaagl_fg_normalize_motion(
+    texture2d<float, access::read> source [[texture(0)]],
+    texture2d<float, access::write> destination [[texture(1)]],
+    constant YaaglFgParams& params [[buffer(0)]],
+    uint2 tid [[thread_position_in_grid]]) {
+    if (any(tid >= params.extent)) return;
+    uint2 sourcePosition = min(
+        uint2((float2(tid) + 0.5f) * float2(params.sourceExtent) /
+              float2(params.extent)), params.sourceExtent - 1u);
+    float2 value = source.read(sourcePosition).xy;
+    float2 pixels = (value * params.motionScale - params.jitterCancellation) *
+                    float2(params.outputExtent) / float2(params.motionTargetExtent);
+    destination.write(float4(pixels, 0.0f, 0.0f), tid);
+}
+
+kernel void yaagl_fg_encode_scatter(
+    texture2d<float, access::read> source [[texture(0)]],
+    texture2d<float, access::write> destination [[texture(1)]],
+    constant YaaglFgParams& params [[buffer(0)]],
+    uint2 tid [[thread_position_in_grid]]) {
+    if (any(tid >= params.extent)) return;
+    float4 color = source.read(tid);
+    color.rgb = fg_encode(color.rgb, params);
+    destination.write(color, uint2(params.sourceOrigin) + tid);
+}
+
+
+
+kernel void yaagl_fg_resample_depth(
+    texture2d<float, access::read> source [[texture(0)]],
+    texture2d<float, access::write> destination [[texture(1)]],
+    constant YaaglFgParams& params [[buffer(0)]],
+    uint2 tid [[thread_position_in_grid]]) {
+    if (any(tid >= params.extent)) return;
+    uint2 sourcePosition = min(
+        uint2((float2(tid) + 0.5f) * float2(params.sourceExtent) /
+              float2(params.extent)), params.sourceExtent - 1u);
+    destination.write(source.read(sourcePosition), tid);
+}

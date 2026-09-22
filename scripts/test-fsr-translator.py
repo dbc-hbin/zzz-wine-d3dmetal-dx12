@@ -27,6 +27,8 @@ def main() -> None:
     parser.add_argument("--compiler", type=Path, default=DEFAULT_COMPILER)
     parser.add_argument("--timeout", type=int, default=180)
     parser.add_argument("--frame-generation", action="store_true")
+    parser.add_argument("--command-buffer", choices=("metal4", "legacy"),
+                        default="metal4")
     args = parser.parse_args()
     source = (ROOT / "d3dmetal-pso-cache" / "fsr-framegeneration.d3d12.test.cpp"
               if args.frame_generation else SOURCE)
@@ -59,6 +61,7 @@ def main() -> None:
         "build_exit": build.returncode,
         "build_log": str(build_log),
         "runtime": str(runtime),
+        "requested_command_buffer": args.command_buffer,
     }
     if build.returncode:
         (run / "evidence.json").write_text(json.dumps(evidence, indent=2) + "\n")
@@ -77,9 +80,28 @@ def main() -> None:
         "WINEDLLOVERRIDES": "amd_fidelityfx_upscaler_dx12,amd_fidelityfx_framegeneration_dx12=b",
 
         "YAAGL_FSR_LOG": str(log),
-        "D3DM_MTL4": "1",
+        "D3DM_MTL4": "1" if args.command_buffer == "metal4" else "0",
+        "MTL_DEBUG_LAYER": "1",
     })
-    run_command = [str(wine), str(executable)]
+    if args.command_buffer == "legacy":
+        real_wine = runtime / "bin" / "wine.real"
+        last_hop = runtime / "bin" / "yaagl-frame-probe-exec"
+        if not real_wine.is_file() or not last_hop.is_file():
+            raise SystemExit(
+                "legacy mode requires bin/wine.real and bin/yaagl-frame-probe-exec")
+        environment.update({
+            "WINE_ENABLE_TIMEOUT_FIX": "1",
+            "CX_ACTIVE_GRAPHICS_BACKEND": "d3dmetal",
+            "D3DM_ENABLE_METALFX": "1",
+            "D3DM_SUPPORT_DXR": "1",
+            "D3DM_VENDOR_ID": "0x1002",
+            "D3DM_DEVICE_ID": "0x7550",
+            "D3DM_DEVICE_DESCRIPTION": "AMD Radeon RX 9070",
+            "WINEMSYNC": "1",
+        })
+        run_command = [str(last_hop), str(real_wine), str(executable)]
+    else:
+        run_command = [str(wine), str(executable)]
     started = time.monotonic()
     with output.open("w") as stream:
         try:
@@ -98,6 +120,7 @@ def main() -> None:
         "run_log": str(output),
         "translator_log": str(log),
         "passed": passed,
+        "mode_behavior_passed": passed,
         "result_lines": [line for line in text.splitlines()
                          if "FSR_TRANSLATOR_" in line or "FSR_FRAMEGENERATION_" in line],
     })

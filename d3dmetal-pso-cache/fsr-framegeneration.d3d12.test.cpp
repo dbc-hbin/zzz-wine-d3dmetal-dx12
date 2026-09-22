@@ -12,6 +12,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 namespace {
@@ -19,6 +20,7 @@ namespace {
 constexpr UINT kWidth = 640;
 constexpr UINT kHeight = 384;
 constexpr UINT kMargin = 48;
+constexpr FfxApiRect2D kPartialRect{64, 40, 512, 288};
 constexpr std::uint64_t kOriginalProvider = 0xf600000000c01006ull;
 constexpr float kSentinel = 7.0f;
 constexpr double kPi = 3.14159265358979323846;
@@ -55,6 +57,13 @@ void require(bool condition, const char* path, const char* reason) {
                      path, reason);
         std::exit(1);
     }
+}
+
+volatile LONG gDebugErrors = 0;
+
+void debugMessage(uint32_t type, const wchar_t* message) {
+    if (type == FFX_API_MESSAGE_TYPE_ERROR && message && message[0] != L'\0')
+        InterlockedIncrement(&gDebugErrors);
 }
 
 struct Motion {
@@ -113,6 +122,128 @@ std::vector<std::uint16_t> makePattern(unsigned pattern, float time) {
     return pixels;
 }
 
+bool inUiPatch(UINT x, UINT y) {
+    return (x >= 176 && x < 288 && y >= 112 && y < 184) ||
+           (x >= 352 && x < 464 && y >= 208 && y < 280);
+}
+
+std::vector<std::uint16_t> makeComposedPattern(unsigned pattern, float time) {
+    auto pixels = makePattern(pattern, time);
+    for (UINT y = 0; y < kHeight; ++y) {
+        for (UINT x = 0; x < kWidth; ++x) {
+            if (!inUiPatch(x, y))
+                continue;
+            const std::size_t offset =
+                (static_cast<std::size_t>(y) * kWidth + x) * 4;
+            const bool opaque = x < 288;
+            const float alpha = opaque ? 1.0f : 0.375f;
+            const float ui[3] = {0.92f, 0.14f, 0.73f};
+            for (unsigned channel = 0; channel < 3; ++channel) {
+                const float scene = unhalf(pixels[offset + channel]);
+                pixels[offset + channel] = half(
+                    ui[channel] * alpha + scene * (1.0f - alpha));
+            }
+            // Keep a deliberately non-opaque source alpha. MetalFX does not
+            // document output-alpha semantics for a precomposited UI texture.
+            pixels[offset + 3] = half(alpha);
+        }
+    }
+    return pixels;
+}
+
+std::vector<float> makeFloatPattern(unsigned pattern, float time) {
+    std::vector<float> pixels(
+        static_cast<std::size_t>(kWidth) * kHeight * 4);
+    for (UINT y = 0; y < kHeight; ++y) {
+        for (UINT x = 0; x < kWidth; ++x) {
+            const std::size_t offset =
+                (static_cast<std::size_t>(y) * kWidth + x) * 4;
+            for (unsigned channel = 0; channel < 3; ++channel)
+                pixels[offset + channel] = patternValue(
+                    pattern, time, x, y, channel);
+            pixels[offset + 3] = 1.0f;
+        }
+    }
+    return pixels;
+}
+
+std::vector<std::uint16_t> makeUiLayer() {
+    std::vector<std::uint16_t> pixels(
+        static_cast<std::size_t>(kWidth) * kHeight * 4, half(0.0f));
+    for (UINT y = 0; y < kHeight; ++y) {
+        for (UINT x = 0; x < kWidth; ++x) {
+            if (!inUiPatch(x, y))
+                continue;
+            const std::size_t offset =
+                (static_cast<std::size_t>(y) * kWidth + x) * 4;
+            const float alpha = x < 288 ? 1.0f : 0.375f;
+            pixels[offset] = half(0.92f * alpha);
+            pixels[offset + 1] = half(0.14f * alpha);
+            pixels[offset + 2] = half(0.73f * alpha);
+            pixels[offset + 3] = half(alpha);
+        }
+    }
+    return pixels;
+}
+
+enum class TransferCase { SDR, PQ, ScRgb };
+
+float encodeFixtureValue(float linear, TransferCase transfer) {
+    if (transfer == TransferCase::ScRgb)
+        return (0.5f + linear * 399.5f) / 80.0f;
+    if (transfer != TransferCase::PQ)
+        return linear;
+    const double luminance = 0.5 + static_cast<double>(linear) * 399.5;
+    constexpr double m1 = 2610.0 / 16384.0;
+    constexpr double m2 = 2523.0 / 32.0;
+    constexpr double c1 = 3424.0 / 4096.0;
+    constexpr double c2 = 2413.0 / 128.0;
+    constexpr double c3 = 2392.0 / 128.0;
+    const double powered = std::pow(luminance / 10000.0, m1);
+    return static_cast<float>(std::pow((c1 + c2 * powered) /
+                                       (1.0 + c3 * powered), m2));
+}
+
+float decodeFixtureValue(float encoded, TransferCase transfer) {
+    if (transfer == TransferCase::ScRgb)
+        return (encoded * 80.0f - 0.5f) / 399.5f;
+    if (transfer != TransferCase::PQ)
+        return encoded;
+    constexpr double m1 = 2610.0 / 16384.0;
+    constexpr double m2 = 2523.0 / 32.0;
+    constexpr double c1 = 3424.0 / 4096.0;
+    constexpr double c2 = 2413.0 / 128.0;
+    constexpr double c3 = 2392.0 / 128.0;
+    const double powered = std::pow(std::max(0.0f, encoded), 1.0 / m2);
+    const double ratio = std::max(powered - c1, 0.0) /
+                         (c2 - c3 * powered);
+    const double luminance = 10000.0 * std::pow(ratio, 1.0 / m1);
+    return static_cast<float>((luminance - 0.5) / 399.5);
+}
+
+std::vector<std::uint16_t> makeTransferPattern(
+    unsigned pattern, float time, TransferCase transfer) {
+    auto pixels = makePattern(pattern, time);
+    for (std::size_t offset = 0; offset < pixels.size(); offset += 4) {
+        for (unsigned channel = 0; channel < 3; ++channel)
+            pixels[offset + channel] = half(encodeFixtureValue(
+                unhalf(pixels[offset + channel]), transfer));
+        pixels[offset + 3] = half(0.625f);
+    }
+    return pixels;
+}
+
+struct ProviderOptions {
+    bool native = false;
+    bool hudless = false;
+    bool displayJitter = false;
+    bool finiteDepthReversed = false;
+    bool distortionFallback = false;
+    bool cameraAbsent = false;
+    bool preselectionRejections = false;
+    TransferCase transfer = TransferCase::SDR;
+};
+
 struct Measurements {
     double previousError = 0.0;
     double currentError = 0.0;
@@ -127,7 +258,8 @@ Measurements inspectOutput(const ReadbackTexture& readback,
                            unsigned pattern, unsigned step,
                            const std::vector<std::uint16_t>& previous,
                            const std::vector<std::uint16_t>& current,
-                           const char* path) {
+                           const char* path, bool hudlessRect,
+                           TransferCase transfer, bool implicitGap) {
     void* mapping = nullptr;
     D3D12_RANGE readRange{0, static_cast<SIZE_T>(readback.size)};
     check(readback.buffer->Map(0, &readRange, &mapping),
@@ -142,9 +274,16 @@ Measurements inspectOutput(const ReadbackTexture& readback,
         for (UINT x = 0; x < kWidth; ++x) {
             const std::size_t offset =
                 (static_cast<std::size_t>(y) * kWidth + x) * 4;
+            const bool inRect =
+                x >= kPartialRect.left &&
+                x < kPartialRect.left + kPartialRect.width &&
+                y >= kPartialRect.top &&
+                y < kPartialRect.top + kPartialRect.height;
+            const bool ui = hudlessRect && inUiPatch(x, y);
             const bool interior =
                 x >= kMargin && x < kWidth - kMargin &&
-                y >= kMargin && y < kHeight - kMargin;
+                y >= kMargin && y < kHeight - kMargin &&
+                (!hudlessRect || (inRect && !ui));
 
             for (unsigned channel = 0; channel < 4; ++channel) {
                 const float value = unhalf(row[x * 4 + channel]);
@@ -152,28 +291,77 @@ Measurements inspectOutput(const ReadbackTexture& readback,
                 require(std::fabs(value - kSentinel) > 0.01f, path,
                         "output contains untouched sentinel");
 
-                if (channel == 3)
+                if (hudlessRect && !inRect) {
+                    const float expected = unhalf(current[offset + channel]);
+                    require(std::fabs(value - expected) < 0.012f, path,
+                            "pixels outside generationRect were modified");
                     continue;
-
-                require(value > -0.25f && value < 1.25f, path,
-                        "SDR output is outside the permitted reconstruction range");
-
-                // Reset output is read back and checked for writes, but it is
-                // not required to interpolate without a previous frame.
-                if (!interior || step < 3)
+                }
+                if (ui) {
+                    // MetalFX documents RGB de/recomposition for a
+                    // precomposited UI texture, but no output-alpha contract.
+                    if (channel == 3)
+                        continue;
+                    const float alpha = x < 288 ? 1.0f : 0.375f;
+                    const float uiValue = channel == 0 ? 0.92f :
+                                          channel == 1 ? 0.14f : 0.73f;
+                    const float generatedScene = patternValue(
+                        pattern, static_cast<float>(step) - 0.5f,
+                        x, y, channel);
+                    const float midpointComposed = uiValue * alpha +
+                        generatedScene * (1.0f - alpha);
+                    const float expected = unhalf(current[offset + channel]);
+                    const float doubleComposed = uiValue * alpha +
+                                                 expected * (1.0f - alpha);
+                    if (std::fabs(value - expected) >= 0.012f) {
+                        std::fprintf(stderr,
+                            "FSR_FRAMEGENERATION_UI_SAMPLE path=%s step=%u "
+                            "x=%u y=%u channel=%u actual=%.6f current=%.6f "
+                            "midpoint_once=%.6f double=%.6f\n",
+                            path, step, x, y, channel, value, expected,
+                            midpointComposed, doubleComposed);
+                        require(false, path,
+                                "HUDless UI was omitted or composed twice");
+                    }
                     continue;
+                }
+                if (channel == 3) {
+                    if (transfer != TransferCase::SDR)
+                        require(std::fabs(value - 1.0f) < 0.012f, path,
+                                "HDR generated output alpha was not one");
+                    continue;
+                }
 
-                const double a = unhalf(previous[offset + channel]);
-                const double b = unhalf(current[offset + channel]);
-                const double midpoint = unhalf(half(patternValue(
+                require(value > -0.25f && value < 5.25f, path,
+                        "output is outside the permitted reconstruction range");
+
+                // Reset output is read back and checked for writes. A frame-ID
+                // discontinuity without an explicit reset must independently
+                // produce the current-frame baseline rather than stale history.
+                if (!interior || (step < 3 && !implicitGap))
+                    continue;
+                if (implicitGap) {
+                    result.currentError += std::fabs(
+                        static_cast<double>(value) -
+                        unhalf(current[offset + channel]));
+                    ++result.samples;
+                    continue;
+                }
+
+                const double measured = decodeFixtureValue(value, transfer);
+                const double a = decodeFixtureValue(
+                    unhalf(previous[offset + channel]), transfer);
+                const double b = decodeFixtureValue(
+                    unhalf(current[offset + channel]), transfer);
+                const double midpoint = patternValue(
                     pattern, static_cast<float>(step) - 0.5f,
-                    x, y, channel)));
-                const double errorA = std::fabs(static_cast<double>(value) - a);
-                const double errorB = std::fabs(static_cast<double>(value) - b);
+                    x, y, channel);
+                const double errorA = std::fabs(measured - a);
+                const double errorB = std::fabs(measured - b);
                 result.previousError += errorA;
                 result.currentError += errorB;
                 result.midpointError +=
-                    std::fabs(static_cast<double>(value) - midpoint);
+                    std::fabs(measured - midpoint);
                 result.endpointSeparation += std::fabs(a - b);
                 if (errorA > 0.02)
                     ++result.changedFromPrevious;
@@ -187,7 +375,12 @@ Measurements inspectOutput(const ReadbackTexture& readback,
     D3D12_RANGE writtenRange{0, 0};
     readback.buffer->Unmap(0, &writtenRange);
 
-    if (step >= 3) {
+    if (implicitGap) {
+        require(result.samples != 0, path, "empty implicit-gap region");
+        result.currentError /= static_cast<double>(result.samples);
+        require(result.currentError < 0.03, path,
+                "frame-ID gap without explicit reset reused stale history");
+    } else if (step >= 3) {
         require(result.samples != 0, path, "empty measurement region");
         const double count = static_cast<double>(result.samples);
         result.previousError /= count;
@@ -226,8 +419,24 @@ Measurements inspectOutput(const ReadbackTexture& readback,
     return result;
 }
 
-void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudless = false) {
-    const char* const path = hudless ? "native-unsupported-hudless" : native ? "native-override" : "builtin";
+void runProvider(Gpu& gpu, const FrameGenerationApi& api,
+                 const ProviderOptions& options = {}) {
+    const bool native = options.native;
+    const bool hudless = options.hudless;
+    const char* const path = hudless ? "metalfx-hudless-rect-ui" :
+        options.preselectionRejections ? "metalfx-preselection-rejections" :
+        options.cameraAbsent ? "metalfx-camera-v1-absent" :
+        options.finiteDepthReversed ? "metalfx-finite-depth-reversed" :
+        options.displayJitter ? "metalfx-display-jitter" :
+        options.transfer == TransferCase::PQ ? "metalfx-pq" :
+        options.transfer == TransferCase::ScRgb ? "metalfx-scrgb" :
+        options.distortionFallback ? "native-distortion-fallback" :
+        native ? "native-override" : "builtin";
+    const bool debugScenario = !native && !hudless &&
+        !options.displayJitter && !options.finiteDepthReversed &&
+        !options.distortionFallback && !options.cameraAbsent &&
+        !options.preselectionRejections &&
+        options.transfer == TransferCase::SDR;
 
     ffxCreateBackendDX12Desc backend{};
     backend.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_DX12;
@@ -244,11 +453,31 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
     original.header.pNext = &version.header;
     original.versionId = kOriginalProvider;
 
+    ffxCreateContextDescFrameGenerationHudless hudlessFormat{};
+    hudlessFormat.header.type =
+        FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION_HUDLESS;
+    hudlessFormat.header.pNext = native ? &original.header : &version.header;
+    hudlessFormat.hudlessBackBufferFormat = ffxApiGetSurfaceFormatDX12(
+        DXGI_FORMAT_R32G32B32A32_FLOAT);
+
     ffxCreateContextDescFrameGeneration create{};
     create.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
-    create.header.pNext = native ? &original.header : &version.header;
+    create.header.pNext = hudless ? &hudlessFormat.header :
+        native ? &original.header : &version.header;
+    create.flags = options.displayJitter
+        ? FFX_FRAMEGENERATION_ENABLE_DISPLAY_RESOLUTION_MOTION_VECTORS |
+              FFX_FRAMEGENERATION_ENABLE_MOTION_VECTORS_JITTER_CANCELLATION |
+              FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED |
+              FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE
+        : options.finiteDepthReversed
+            ? FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED
+        : options.transfer != TransferCase::SDR
+            ? FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE
+            : debugScenario ? FFX_FRAMEGENERATION_ENABLE_DEBUG_CHECKING : 0u;
     create.displaySize = {kWidth, kHeight};
-    create.maxRenderSize = {kWidth, kHeight};
+    create.maxRenderSize = options.displayJitter
+        ? FfxApiDimensions2D{kWidth / 2, kHeight / 2}
+        : FfxApiDimensions2D{kWidth, kHeight};
     create.backBufferFormat =
         ffxApiGetSurfaceFormatDX12(DXGI_FORMAT_R16G16B16A16_FLOAT);
 
@@ -277,7 +506,8 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
                 path, static_cast<unsigned long long>(provider.versionId),
                 provider.versionName);
 
-    if (!native) {
+    const bool verifyDebugCallback = debugScenario;
+    if (options.preselectionRejections) {
         ffxApiHeader unknown{
             FFX_API_MAKE_EFFECT_SUB_ID(FFX_API_EFFECT_ID_FRAMEGENERATION, 0xff),
             nullptr};
@@ -289,6 +519,15 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
                    FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE, path,
                    "unknown dispatch");
     }
+    if (verifyDebugCallback) {
+        InterlockedExchange(&gDebugErrors, 0);
+        ffxConfigureDescGlobalDebug1 debug{};
+        debug.header.type = FFX_API_CONFIGURE_DESC_TYPE_GLOBALDEBUG1;
+        debug.fpMessage = debugMessage;
+        debug.debugLevel = FFX_API_CONFIGURE_GLOBALDEBUG_LEVEL_ERRORS;
+        requireFfx(api.configure(&context, &debug.header), FFX_API_RETURN_OK,
+                   path, "configure global debug callback");
+    }
 
     using Texture = decltype(makeTexture(
         gpu, kWidth, kHeight, DXGI_FORMAT_R32_FLOAT,
@@ -297,38 +536,72 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
     // Keep all caller resources alive through context destruction, including
     // endpoints used as history. Every output starts with a fresh sentinel.
     std::vector<Texture> resources;
-    resources.reserve(24);
+    resources.reserve(40);
+    const UINT renderWidth = options.displayJitter ? kWidth / 2 : kWidth;
+    const UINT renderHeight = options.displayJitter ? kHeight / 2 : kHeight;
     const std::size_t pixelCount =
         static_cast<std::size_t>(kWidth) * kHeight;
-    const std::vector<float> depthPixels(pixelCount, 0.5f);
+    const std::size_t depthPixelCount =
+        static_cast<std::size_t>(renderWidth) * renderHeight;
+    const std::vector<float> depthPixels(depthPixelCount, 0.5f);
     const std::vector<std::uint16_t> sentinel(pixelCount * 4, half(kSentinel));
     std::uint64_t frameID = 0;
     unsigned verifiedIntermediates = 0;
 
     for (unsigned pattern = 0; pattern < 2; ++pattern) {
+        if (pattern == 1 && !native)
+            frameID += 2; // A real frame-ID discontinuity paired with reset.
         std::vector<std::uint16_t> previous;
         // The measured MetalFX reset sequence needs two further warm-up frames.
         // Verify writes throughout warm-up and actual interpolation thereafter.
         for (unsigned step = 0; step < 5; ++step, ++frameID) {
-            const bool reset = step == 0;
-            const auto current = makePattern(pattern, static_cast<float>(step));
+            const bool implicitGap = options.displayJitter &&
+                pattern == 1 && step == 0;
+            const bool reset = step == 0 && !implicitGap;
+            const auto scene = options.transfer == TransferCase::SDR
+                ? makePattern(pattern, static_cast<float>(step))
+                : makeTransferPattern(pattern, static_cast<float>(step),
+                                      options.transfer);
+            const auto current = hudless
+                ? makeComposedPattern(pattern, static_cast<float>(step))
+                : scene;
+            const auto hudlessPixels = makeFloatPattern(
+                pattern, static_cast<float>(step));
             const Motion velocity = patternMotion(pattern);
 
             // FFX motion vectors map the current sample to the previous frame.
             // Pixel-valued vectors are converted to UV by the prepare scale.
+            const float jitterX = options.displayJitter
+                ? (step % 2 == 0 ? 0.25f : -0.25f) : 0.0f;
+            const float jitterY = options.displayJitter
+                ? (step % 2 == 0 ? -0.375f : 0.375f) : 0.0f;
+            const float previousJitterX = options.displayJitter
+                ? (step % 2 == 0 ? -0.25f : 0.25f) : 0.0f;
+            const float previousJitterY = options.displayJitter
+                ? (step % 2 == 0 ? 0.375f : -0.375f) : 0.0f;
             std::vector<std::uint16_t> motionPixels(pixelCount * 2);
             for (std::size_t i = 0; i < pixelCount; ++i) {
-                motionPixels[i * 2] = half(reset ? 0.0f : -velocity.x);
-                motionPixels[i * 2 + 1] = half(reset ? 0.0f : -velocity.y);
+                motionPixels[i * 2] = half(reset ? 0.0f :
+                    -velocity.x + previousJitterX - jitterX);
+                motionPixels[i * 2 + 1] = half(reset ? 0.0f :
+                    -velocity.y + previousJitterY - jitterY);
             }
 
             auto color = makeTexture(
                 gpu, kWidth, kHeight, DXGI_FORMAT_R16G16B16A16_FLOAT,
                 D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
+            auto hudlessColor = makeTexture(
+                gpu, kWidth, kHeight, hudless
+                    ? DXGI_FORMAT_R32G32B32A32_FLOAT
+                    : DXGI_FORMAT_R16G16B16A16_FLOAT,
+                D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
             auto depth = makeTexture(
-                gpu, kWidth, kHeight, DXGI_FORMAT_R32_FLOAT,
+                gpu, renderWidth, renderHeight, DXGI_FORMAT_R32_FLOAT,
                 D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
             auto motion = makeTexture(
+                gpu, kWidth, kHeight, DXGI_FORMAT_R16G16_FLOAT,
+                D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
+            auto distortion = makeTexture(
                 gpu, kWidth, kHeight, DXGI_FORMAT_R16G16_FLOAT,
                 D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
             auto output = makeTexture(
@@ -337,27 +610,54 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
                 D3D12_RESOURCE_STATE_COPY_DEST);
 
             resources.push_back(color);
+            resources.push_back(hudlessColor);
             resources.push_back(depth);
             resources.push_back(motion);
+            resources.push_back(distortion);
             resources.push_back(output);
 
             uploadTexture(gpu, color.Get(), current.data(), kWidth * 8);
-            uploadTexture(gpu, depth.Get(), depthPixels.data(), kWidth * 4);
+            if (hudless)
+                uploadTexture(gpu, hudlessColor.Get(), hudlessPixels.data(),
+                              kWidth * 16);
+            else
+                uploadTexture(gpu, hudlessColor.Get(), scene.data(), kWidth * 8);
+            uploadTexture(gpu, depth.Get(), depthPixels.data(), renderWidth * 4);
             uploadTexture(gpu, motion.Get(), motionPixels.data(), kWidth * 4);
+            const std::vector<std::uint16_t> zeroDistortion(pixelCount * 2);
+            uploadTexture(gpu, distortion.Get(), zeroDistortion.data(), kWidth * 4);
             uploadTexture(gpu, output.Get(), sentinel.data(), kWidth * 8);
 
             ffxConfigureDescFrameGeneration configure{};
             configure.header.type =
                 FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+            ffxConfigureDescFrameGenerationRegisterDistortionFieldResource
+                distortionConfiguration{};
+            distortionConfiguration.header.type =
+                FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION_REGISTERDISTORTIONRESOURCE;
+            distortionConfiguration.distortionField = ffxApiGetResourceDX12(
+                distortion.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+            if (options.distortionFallback)
+                configure.header.pNext = &distortionConfiguration.header;
             configure.swapChain = nullptr;
             configure.frameGenerationEnabled = true;
             configure.allowAsyncWorkloads = false;
             configure.flags = kDispatchFlags;
-            configure.generationRect = {0, 0, kWidth, kHeight};
+            configure.generationRect = hudless
+                ? kPartialRect : FfxApiRect2D{0, 0, kWidth, kHeight};
             configure.frameID = frameID;
-            if (hudless)
+            if (hudless) {
                 configure.HUDLessColor = ffxApiGetResourceDX12(
-                    color.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+                    hudlessColor.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+                if (frameID == 0) {
+                    auto badHudlessFormat = configure;
+                    badHudlessFormat.HUDLessColor = ffxApiGetResourceDX12(
+                        color.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+                    requireFfx(api.configure(&context, &badHudlessFormat.header),
+                               FFX_API_RETURN_ERROR_PARAMETER, path,
+                               "HUDless resource contradicts declared format");
+                }
+            }
             requireFfx(api.configure(&context, &configure.header),
                        FFX_API_RETURN_OK, path, "configure direct interpolation");
 
@@ -373,14 +673,19 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
             prepare.frameID = frameID;
             prepare.flags = kDispatchFlags;
             prepare.commandList = gpu.list.Get();
-            prepare.renderSize = {kWidth, kHeight};
+            prepare.renderSize = {renderWidth, renderHeight};
+            prepare.jitterOffset = {jitterX, jitterY};
             prepare.motionVectorScale = {1.0f, 1.0f};
             prepare.frameTimeDelta = 16.6667f;
             prepare.reset = reset;
-            prepare.cameraNear = 0.1f;
-            prepare.cameraFar = 1000.0f;
+            prepare.cameraNear = options.finiteDepthReversed ? 5000.0f : 0.1f;
+            prepare.cameraFar = options.displayJitter
+                ? std::numeric_limits<float>::infinity()
+                : options.finiteDepthReversed ? 0.1f : 1000.0f;
             prepare.cameraFovAngleVertical = 1.04719755f;
-            prepare.viewSpaceToMetersFactor = 1.0f;
+            prepare.viewSpaceToMetersFactor =
+                options.cameraAbsent && frameID == 0 ? 0.0f :
+                debugScenario ? (step == 0 ? -1.0f : 0.0f) : 1.0f;
             prepare.depth = ffxApiGetResourceDX12(
                 depth.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
             prepare.motionVectors = ffxApiGetResourceDX12(
@@ -399,42 +704,147 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
             dispatch.numGeneratedFrames = 1;
             dispatch.reset = reset;
             dispatch.backbufferTransferFunction =
-                FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
-            dispatch.minMaxLuminance[0] = 0.0f;
-            dispatch.minMaxLuminance[1] = 100.0f;
-            dispatch.generationRect = {0, 0, kWidth, kHeight};
+                options.transfer == TransferCase::PQ
+                    ? FFX_API_BACKBUFFER_TRANSFER_FUNCTION_PQ
+                    : options.transfer == TransferCase::ScRgb
+                        ? FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB
+                        : FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
+            dispatch.minMaxLuminance[0] = 0.5f;
+            dispatch.minMaxLuminance[1] = 400.0f;
+            dispatch.generationRect = hudless
+                ? kPartialRect : FfxApiRect2D{0, 0, kWidth, kHeight};
             dispatch.frameID = frameID;
 
-            if (!native && !hudless && frameID == 0) {
-                // These are real malformed PrepareV2/dispatch contracts, not
-                // fabricated descriptor layouts or unsupported feature probes.
+            if (options.preselectionRejections && frameID == 0) {
+                // Rejected pending-provider calls must not latch native fallback.
+                auto badPrepare = prepare;
+                badPrepare.commandList = nullptr;
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "pending PrepareV2 without command list");
+                badPrepare = prepare;
+                badPrepare.depth = {};
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "pending PrepareV2 without depth");
+                badPrepare = prepare;
+                badPrepare.motionVectors = {};
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "pending PrepareV2 without motion vectors");
+            }
+
+            if (options.cameraAbsent && frameID == 0) {
+                // V1 without the optional CameraInfo chain is valid and must
+                // explicitly reach the provider as camera-info-absent.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+                ffxDispatchDescFrameGenerationPrepare prepareV1{};
+#pragma clang diagnostic pop
+                prepareV1.header.type =
+                    FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE;
+                prepareV1.frameID = prepare.frameID;
+                prepareV1.flags = prepare.flags;
+                prepareV1.commandList = prepare.commandList;
+                prepareV1.renderSize = prepare.renderSize;
+                prepareV1.jitterOffset = prepare.jitterOffset;
+                prepareV1.motionVectorScale = prepare.motionVectorScale;
+                prepareV1.frameTimeDelta = prepare.frameTimeDelta;
+                prepareV1.cameraNear = prepare.cameraNear;
+                prepareV1.cameraFar = prepare.cameraFar;
+                prepareV1.cameraFovAngleVertical = prepare.cameraFovAngleVertical;
+                prepareV1.viewSpaceToMetersFactor = prepare.viewSpaceToMetersFactor;
+                prepareV1.depth = prepare.depth;
+                prepareV1.motionVectors = prepare.motionVectors;
+                requireFfx(api.dispatch(&context, &prepareV1.header),
+                           FFX_API_RETURN_OK, path, "PrepareV1 without CameraInfo");
+                if (frameID == 0 && !options.preselectionRejections) {
+                    requireFfx(api.query(&context, &provider.header),
+                               FFX_API_RETURN_OK, path,
+                               "query provider before rejected PrepareV1");
+                    const std::uint64_t selectedProvider = provider.versionId;
+                    auto rejectedPrepare = prepareV1;
+                    rejectedPrepare.viewSpaceToMetersFactor =
+                        std::numeric_limits<float>::quiet_NaN();
+                    requireFfx(api.dispatch(&context, &rejectedPrepare.header),
+                               FFX_API_RETURN_ERROR_PARAMETER, path,
+                               "PrepareV1 with non-finite world scale");
+                    rejectedPrepare = prepareV1;
+                    rejectedPrepare.cameraFar =
+                        std::numeric_limits<float>::infinity();
+                    requireFfx(api.dispatch(&context, &rejectedPrepare.header),
+                               FFX_API_RETURN_ERROR_PARAMETER, path,
+                               "PrepareV1 with infinite far plane");
+                    requireFfx(api.query(&context, &provider.header),
+                               FFX_API_RETURN_OK, path,
+                               "query provider after rejected PrepareV1");
+                    require(provider.versionId == selectedProvider, path,
+                            "rejected PrepareV1 changed provider state");
+                }
+            } else {
+                requireFfx(api.dispatch(&context, &prepare.header),
+                           FFX_API_RETURN_OK, path, "PrepareV2 with CameraInfo");
+            }
+            requireFfx(api.query(&context, &provider.header), FFX_API_RETURN_OK, path,
+                       "query actual prepared provider");
+            require(provider.versionId == (native || options.distortionFallback
+                        ? kOriginalProvider : 0x4d46584647000001ull),
+                    path, "Prepare selected the wrong provider");
+
+            if (verifyDebugCallback && frameID == 0) {
+                // Malformed calls are checked only after a valid V2 Prepare has
+                // selected MetalFX; rejection must not steer provider choice.
                 auto badPrepare = prepare;
                 badPrepare.commandList = nullptr;
                 requireFfx(api.dispatch(&context, &badPrepare.header),
                            FFX_API_RETURN_ERROR_PARAMETER, path,
                            "PrepareV2 without command list");
-
                 badPrepare = prepare;
                 badPrepare.depth = {};
                 requireFfx(api.dispatch(&context, &badPrepare.header),
                            FFX_API_RETURN_ERROR_PARAMETER, path,
                            "PrepareV2 without depth");
-
                 badPrepare = prepare;
                 badPrepare.motionVectors = {};
                 requireFfx(api.dispatch(&context, &badPrepare.header),
                            FFX_API_RETURN_ERROR_PARAMETER, path,
                            "PrepareV2 without motion vectors");
+                const std::uint64_t selectedProvider = provider.versionId;
+                badPrepare = prepare;
+                badPrepare.viewSpaceToMetersFactor =
+                    std::numeric_limits<float>::quiet_NaN();
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "PrepareV2 with non-finite world scale");
+                badPrepare = prepare;
+                badPrepare.cameraFar =
+                    std::numeric_limits<float>::infinity();
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "PrepareV2 with infinite far plane");
+                badPrepare = prepare;
+                badPrepare.cameraFar = badPrepare.cameraNear;
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "PrepareV2 with equal finite planes");
+                badPrepare = prepare;
+                badPrepare.cameraNear = 0.0f;
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "PrepareV2 with nonpositive near plane");
+                badPrepare = prepare;
+                badPrepare.cameraFar = 0.0f;
+                requireFfx(api.dispatch(&context, &badPrepare.header),
+                           FFX_API_RETURN_ERROR_PARAMETER, path,
+                           "PrepareV2 with nonpositive far plane");
+                requireFfx(api.query(&context, &provider.header),
+                           FFX_API_RETURN_OK, path,
+                           "query provider after rejected PrepareV2");
+                require(provider.versionId == selectedProvider, path,
+                        "rejected PrepareV2 changed provider state");
             }
 
-            requireFfx(api.dispatch(&context, &prepare.header),
-                       FFX_API_RETURN_OK, path, "PrepareV2");
-            requireFfx(api.query(&context, &provider.header), FFX_API_RETURN_OK, path,
-                       "query actual prepared provider");
-            require(provider.versionId == (native || hudless ? kOriginalProvider : 0x4d46584647000001ull),
-                    path, "Prepare selected the wrong provider");
-
-            if (!native && !hudless && frameID == 0) {
+            if (verifyDebugCallback && frameID == 0) {
                 auto badDispatch = dispatch;
                 badDispatch.commandList = nullptr;
                 requireFfx(api.dispatch(&context, &badDispatch.header),
@@ -452,6 +862,15 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
                 requireFfx(api.dispatch(&context, &badDispatch.header),
                            FFX_API_RETURN_ERROR_PARAMETER, path,
                            "generation without output");
+                const std::uint64_t selectedProvider = provider.versionId;
+                requireFfx(api.query(&context, &provider.header),
+                           FFX_API_RETURN_OK, path,
+                           "query provider after rejected generation calls");
+                require(provider.versionId == selectedProvider, path,
+                        "rejected generation call changed provider state");
+                if (verifyDebugCallback)
+                    require(InterlockedCompareExchange(&gDebugErrors, 0, 0) > 0,
+                            path, "debug callback did not report public API errors");
             }
 
             requireFfx(api.dispatch(&context, &dispatch.header),
@@ -471,7 +890,8 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api, bool native, bool hudl
             gpu.submit();
             check(gpu.device->GetDeviceRemovedReason(),
                   "framegeneration GPU completion");
-            inspectOutput(readback, pattern, step, previous, current, path);
+            inspectOutput(readback, pattern, step, previous, current, path, hudless,
+                          options.transfer, implicitGap);
             if (step >= 3)
                 ++verifiedIntermediates;
             previous = current;
@@ -498,22 +918,66 @@ namespace {
 struct SwapchainSmokeCallbacks {
     const FrameGenerationApi* api = nullptr;
     ffxContext* context = nullptr;
+    HANDLE callbackEntered = nullptr;
+    HANDLE callbackRelease = nullptr;
+    volatile LONG blockNext = 0;
     volatile LONG calls = 0;
     volatile LONG successes = 0;
     volatile LONG generated = 0;
     volatile LONG failures = 0;
+    void* volatile generatedOutput = nullptr;
 };
+
+struct ConfigureThreadCall {
+    const FrameGenerationApi* api = nullptr;
+    ffxContext* context = nullptr;
+    ffxConfigureDescFrameGeneration configure{};
+    HANDLE started = nullptr;
+    HANDLE done = nullptr;
+    ffxReturnCode_t result = FFX_API_RETURN_ERROR_RUNTIME_ERROR;
+};
+
+DWORD WINAPI swapchainConfigureThread(void* parameter) {
+    auto& call = *static_cast<ConfigureThreadCall*>(parameter);
+    SetEvent(call.started);
+    call.result = call.api->configure(call.context, &call.configure.header);
+    SetEvent(call.done);
+    return 0;
+}
+
+struct PresentThreadCall {
+    IDXGISwapChain4* swapchain = nullptr;
+    HANDLE done = nullptr;
+    HRESULT result = E_FAIL;
+};
+
+DWORD WINAPI swapchainPresentThread(void* parameter) {
+    auto& call = *static_cast<PresentThreadCall*>(parameter);
+    call.result = call.swapchain->Present(1, 0);
+    SetEvent(call.done);
+    return 0;
+}
 
 ffxReturnCode_t swapchainSmokeGenerate(
     ffxDispatchDescFrameGeneration* params, void* user) {
     auto& state = *static_cast<SwapchainSmokeCallbacks*>(user);
     InterlockedIncrement(&state.calls);
 
+    if (InterlockedCompareExchange(&state.blockNext, 0, 1) == 1) {
+        SetEvent(state.callbackEntered);
+        WaitForSingleObject(state.callbackRelease, INFINITE);
+    }
+
     // Dispatch exactly the resources and command list supplied by the real
     // swapchain. In particular, do not substitute an application-owned output.
     const ffxReturnCode_t result =
         state.api->dispatch(state.context, &params->header);
     if (result == FFX_API_RETURN_OK) {
+        auto* output = static_cast<ID3D12Resource*>(params->outputs[0].resource);
+        if (output) output->AddRef();
+        auto* previous = static_cast<ID3D12Resource*>(
+            InterlockedExchangePointer(&state.generatedOutput, output));
+        if (previous) previous->Release();
         InterlockedIncrement(&state.successes);
         InterlockedExchangeAdd(
             &state.generated, static_cast<LONG>(params->numGeneratedFrames));
@@ -521,6 +985,90 @@ ffxReturnCode_t swapchainSmokeGenerate(
         InterlockedIncrement(&state.failures);
     }
     return result;
+}
+
+void runBlockedConfigure(
+    IDXGISwapChain4* swapchain, const FrameGenerationApi& api,
+    ffxContext& context, SwapchainSmokeCallbacks& blockedCallback,
+    const ffxConfigureDescFrameGeneration& configure,
+    bool shouldCompleteWhileBlocked) {
+    ResetEvent(blockedCallback.callbackEntered);
+    ResetEvent(blockedCallback.callbackRelease);
+    InterlockedExchange(&blockedCallback.blockNext, 1);
+
+    PresentThreadCall present{swapchain, CreateEventW(nullptr, TRUE, FALSE, nullptr)};
+    require(present.done != nullptr, "swapchain", "present completion event failed");
+    HANDLE presentThread = CreateThread(
+        nullptr, 0, swapchainPresentThread, &present, 0, nullptr);
+    require(presentThread != nullptr, "swapchain", "present thread creation failed");
+
+    DWORD entered = WaitForSingleObject(blockedCallback.callbackEntered, 30000);
+    if (entered != WAIT_OBJECT_0) {
+        SetEvent(blockedCallback.callbackRelease);
+        WaitForSingleObject(presentThread, 30000);
+        CloseHandle(presentThread);
+        CloseHandle(present.done);
+        require(false, "swapchain", "generation callback barrier was not reached");
+    }
+
+    ConfigureThreadCall call{&api, &context, configure};
+    call.started = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    call.done = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    require(call.started && call.done, "swapchain",
+            "configure synchronization event failed");
+    HANDLE configureThread = CreateThread(
+        nullptr, 0, swapchainConfigureThread, &call, 0, nullptr);
+    require(configureThread != nullptr, "swapchain",
+            "configure thread creation failed");
+    require(WaitForSingleObject(call.started, 30000) == WAIT_OBJECT_0,
+            "swapchain", "configure thread did not start");
+
+    const bool observed = !shouldCompleteWhileBlocked ||
+        WaitForSingleObject(call.done, 30000) == WAIT_OBJECT_0;
+
+    // Always release and join before reporting a failed overlap assertion.
+    SetEvent(blockedCallback.callbackRelease);
+    const DWORD presentDone = WaitForSingleObject(present.done, 30000);
+    const DWORD configureDone = WaitForSingleObject(call.done, 30000);
+    WaitForSingleObject(presentThread, 30000);
+    WaitForSingleObject(configureThread, 30000);
+    CloseHandle(presentThread);
+    CloseHandle(configureThread);
+    CloseHandle(present.done);
+    CloseHandle(call.started);
+    CloseHandle(call.done);
+
+    require(observed, "swapchain",
+            "unchanged callback configuration drained an active frame");
+    require(presentDone == WAIT_OBJECT_0 && configureDone == WAIT_OBJECT_0,
+            "swapchain", "blocked presenter/configure cleanup timed out");
+    check(present.result, "swapchain overlapped Present");
+    requireFfx(call.result, FFX_API_RETURN_OK, "swapchain",
+               "overlapped configure");
+}
+
+void inspectGeneratedSwapchainOutput(
+    Gpu& gpu, SwapchainSmokeCallbacks& callbacks, unsigned frame,
+    const std::vector<std::uint16_t>& previous,
+    const std::vector<std::uint16_t>& current, bool reset) {
+    auto* resource = static_cast<ID3D12Resource*>(
+        InterlockedExchangePointer(&callbacks.generatedOutput, nullptr));
+    require(resource != nullptr, "swapchain",
+            "generation callback did not retain its output");
+    ComPtr<ID3D12Resource> output;
+    output.Attach(resource);
+    auto readback = makeReadback(gpu, output.Get());
+    gpu.begin();
+    transition(gpu.list.Get(), output.Get(),
+               D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+               D3D12_RESOURCE_STATE_COPY_SOURCE);
+    copyToReadback(gpu.list.Get(), output.Get(), readback);
+    transition(gpu.list.Get(), output.Get(),
+               D3D12_RESOURCE_STATE_COPY_SOURCE,
+               D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gpu.submit();
+    inspectOutput(readback, 0, frame, previous, current, "swapchain",
+                  false, TransferCase::SDR, reset);
 }
 
 void swapchainSmokeFence(Gpu& gpu) {
@@ -569,9 +1117,52 @@ void swapchainSmokePump(HWND window) {
             "presentation window was destroyed");
 }
 
+void inspectSwapchainUi(const ReadbackTexture& readback) {
+    void* mapping = nullptr;
+    D3D12_RANGE readRange{0, static_cast<SIZE_T>(readback.size)};
+    check(readback.buffer->Map(0, &readRange, &mapping),
+          "Map presented swapchain image");
+    const auto* bytes = static_cast<const std::uint8_t*>(mapping);
+    double bestSingle = 1e9;
+    double bestDouble = 1e9;
+    for (unsigned phase = 138; phase <= 156; ++phase) {
+        const float time = static_cast<float>(phase) * 0.5f;
+        double singleError = 0.0;
+        double doubleError = 0.0;
+        std::size_t samples = 0;
+        for (UINT y = 224; y < 264; y += 4) {
+            const auto* row = reinterpret_cast<const std::uint16_t*>(
+                bytes + readback.footprint.Offset +
+                static_cast<SIZE_T>(y) * readback.footprint.Footprint.RowPitch);
+            for (UINT x = 368; x < 448; x += 4) {
+                for (unsigned channel = 0; channel < 3; ++channel) {
+                    const float scene = patternValue(0, time, x, y, channel);
+                    const float ui = channel == 0 ? 0.92f :
+                                     channel == 1 ? 0.14f : 0.73f;
+                    const float once = ui * 0.375f + scene * 0.625f;
+                    const float twice = ui * 0.375f + once * 0.625f;
+                    const float actual = unhalf(row[x * 4 + channel]);
+                    singleError += std::fabs(actual - once);
+                    doubleError += std::fabs(actual - twice);
+                    ++samples;
+                }
+            }
+        }
+        bestSingle = std::min(bestSingle, singleError / samples);
+        bestDouble = std::min(bestDouble, doubleError / samples);
+    }
+    D3D12_RANGE writtenRange{0, 0};
+    readback.buffer->Unmap(0, &writtenRange);
+    require(bestSingle < 0.04, "swapchain",
+            "presented translucent UI does not match one composition");
+    require(bestSingle < bestDouble * 0.65, "swapchain",
+            "registered translucent UI was composed twice");
+}
+
 void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
     const char* const path = "swapchain";
     constexpr UINT disabledFrames = 70;
+    constexpr UINT overlapFrame = disabledFrames + 3;
     constexpr UINT frameCount = disabledFrames + 8;
     constexpr DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT;
 
@@ -667,6 +1258,7 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
     ffxCreateContextDescFrameGeneration create{};
     create.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
     create.header.pNext = &version.header; // Automatic provider selection.
+    create.flags = FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED;
     create.displaySize = {kWidth, kHeight};
     create.maxRenderSize = {kWidth, kHeight};
     create.backBufferFormat = ffxApiGetSurfaceFormatDX12(format);
@@ -676,9 +1268,32 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
                FFX_API_RETURN_OK, path, "create automatic FG");
     require(context != nullptr, path, "null FG context");
 
+    auto ui = makeTexture(
+        gpu, kWidth, kHeight, format, D3D12_RESOURCE_FLAG_NONE,
+        D3D12_RESOURCE_STATE_COPY_DEST);
+    const auto uiPixels = makeUiLayer();
+    uploadTexture(gpu, ui.Get(), uiPixels.data(), kWidth * 8);
+    ffxConfigureDescFrameGenerationSwapChainRegisterUiResourceDX12 registerUi{};
+    registerUi.header.type =
+        FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_REGISTERUIRESOURCE_DX12;
+    registerUi.uiResource = ffxApiGetResourceDX12(
+        ui.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+    registerUi.flags = FFX_FRAMEGENERATION_UI_COMPOSITION_FLAG_USE_PREMUL_ALPHA;
+    requireFfx(api.configure(&swapContext, &registerUi.header),
+               FFX_API_RETURN_OK, path, "register premultiplied UI resource");
+
     SwapchainSmokeCallbacks callbacks{};
     callbacks.api = &api;
     callbacks.context = &context;
+    callbacks.callbackEntered = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    callbacks.callbackRelease = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    require(callbacks.callbackEntered && callbacks.callbackRelease, path,
+            "callback synchronization event creation failed");
+    SwapchainSmokeCallbacks replacementCallbacks{};
+    replacementCallbacks.api = &api;
+    replacementCallbacks.context = &context;
+    replacementCallbacks.callbackEntered = callbacks.callbackEntered;
+    replacementCallbacks.callbackRelease = callbacks.callbackRelease;
 
     ffxConfigureDescFrameGeneration configure{};
     configure.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
@@ -694,15 +1309,20 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
     configure.presentCallbackUserContext = nullptr;
 
     std::vector<ComPtr<ID3D12Resource>> resources;
-    resources.reserve(frameCount * 3);
+    resources.reserve(frameCount * 4 + 1);
+    resources.push_back(ui);
     const std::size_t pixelCount =
         static_cast<std::size_t>(kWidth) * kHeight;
     const std::vector<float> depthPixels(pixelCount, 0.5f);
+    ComPtr<ID3D12Resource> queuedHudless;
+    std::vector<std::uint16_t> previousScene;
+    LONG oldCallsAfterReplacement = 0;
 
     for (UINT frame = 0; frame < frameCount; ++frame) {
         swapchainSmokePump(window);
 
-        const auto pixels = makePattern(0, static_cast<float>(frame));
+        const auto scenePixels = makePattern(0, static_cast<float>(frame));
+        const auto pixels = makeComposedPattern(0, static_cast<float>(frame));
         const Motion velocity = patternMotion(0);
         std::vector<std::uint16_t> vectors(pixelCount * 2);
         for (std::size_t i = 0; i < pixelCount; ++i) {
@@ -713,6 +1333,17 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
         auto color = makeTexture(
             gpu, kWidth, kHeight, format, D3D12_RESOURCE_FLAG_NONE,
             D3D12_RESOURCE_STATE_COPY_DEST);
+        ComPtr<ID3D12Resource> hudlessColor;
+        const bool reusedQueuedHudless =
+            frame == overlapFrame + 1 && queuedHudless;
+        if (reusedQueuedHudless) {
+            hudlessColor = queuedHudless;
+            queuedHudless.Reset();
+        } else {
+            hudlessColor = makeTexture(
+                gpu, kWidth, kHeight, format, D3D12_RESOURCE_FLAG_NONE,
+                D3D12_RESOURCE_STATE_COPY_DEST);
+        }
         auto depth = makeTexture(
             gpu, kWidth, kHeight, DXGI_FORMAT_R32_FLOAT,
             D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
@@ -721,19 +1352,35 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
             D3D12_RESOURCE_FLAG_NONE, D3D12_RESOURCE_STATE_COPY_DEST);
 
         resources.push_back(color);
+        if (frame != overlapFrame)
+            resources.push_back(hudlessColor);
         resources.push_back(depth);
         resources.push_back(motion);
 
         // uploadTexture already transitions COPY_DEST -> COMPUTE_READ and
         // waits for completion. Do not repeat that transition afterward.
         uploadTexture(gpu, color.Get(), pixels.data(), kWidth * 8);
+        if (!reusedQueuedHudless)
+            uploadTexture(gpu, hudlessColor.Get(), scenePixels.data(), kWidth * 8);
         uploadTexture(gpu, depth.Get(), depthPixels.data(), kWidth * 4);
         uploadTexture(gpu, motion.Get(), vectors.data(), kWidth * 4);
+        if (frame == overlapFrame) {
+            queuedHudless = makeTexture(
+                gpu, kWidth, kHeight, format, D3D12_RESOURCE_FLAG_NONE,
+                D3D12_RESOURCE_STATE_COPY_DEST);
+            const auto queuedScene = makePattern(
+                0, static_cast<float>(frame + 1));
+            uploadTexture(gpu, queuedHudless.Get(), queuedScene.data(), kWidth * 8);
+        }
 
         configure.frameID = frame;
         configure.frameGenerationEnabled = frame >= disabledFrames;
+        configure.HUDLessColor = ffxApiGetResourceDX12(
+            hudlessColor.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
         requireFfx(api.configure(&context, &configure.header),
                    FFX_API_RETURN_OK, path, "configure FG callbacks");
+        if (frame == overlapFrame)
+            hudlessColor.Reset();
 
         ComPtr<ID3D12Resource> backbuffer;
         check(swapchain->GetBuffer(
@@ -766,8 +1413,8 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
         prepare.motionVectorScale = {1.0f, 1.0f};
         prepare.frameTimeDelta = 16.6667f;
         prepare.reset = frame == 0;
-        prepare.cameraNear = 0.1f;
-        prepare.cameraFar = 1000.0f;
+        prepare.cameraNear = 5000.0f;
+        prepare.cameraFar = 0.1f;
         prepare.cameraFovAngleVertical = 1.04719755f;
         prepare.viewSpaceToMetersFactor = 1.0f;
         prepare.depth = ffxApiGetResourceDX12(
@@ -791,28 +1438,94 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
                 path, "Prepare did not select MetalFX");
 
         gpu.submit();
-        check(swapchain->Present(1, 0), "swapchain Present");
+        if (frame == overlapFrame) {
+            auto queued = configure;
+            queued.frameID = frame + 1;
+            queued.HUDLessColor = ffxApiGetResourceDX12(
+                queuedHudless.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+            runBlockedConfigure(swapchain.Get(), api, context, callbacks,
+                                queued, true);
+        } else if (frame == overlapFrame + 1) {
+            auto replacement = configure;
+            replacement.frameGenerationCallbackUserContext =
+                &replacementCallbacks;
+            runBlockedConfigure(swapchain.Get(), api, context, callbacks,
+                                replacement, false);
+            configure.frameGenerationCallbackUserContext =
+                &replacementCallbacks;
+            oldCallsAfterReplacement = InterlockedCompareExchange(
+                &callbacks.calls, 0, 0);
+        } else {
+            check(swapchain->Present(1, 0), "swapchain Present");
+        }
         swapchainSmokeDrain(gpu, api, swapContext);
         backbuffer.Reset();
 
-        require(InterlockedCompareExchange(&callbacks.failures, 0, 0) == 0,
+        require(InterlockedCompareExchange(&callbacks.failures, 0, 0) == 0 &&
+                    InterlockedCompareExchange(
+                        &replacementCallbacks.failures, 0, 0) == 0,
                 path, "interpolation callback dispatch failed");
+        if (frame == disabledFrames || frame >= overlapFrame) {
+            auto& source = frame <= overlapFrame + 1
+                ? callbacks : replacementCallbacks;
+            inspectGeneratedSwapchainOutput(
+                gpu, source, frame, previousScene, scenePixels,
+                frame == disabledFrames);
+        }
+        previousScene = scenePixels;
     }
 
-    // Drain before changing callback registration or destroying its context.
+    // Drain before examining real swapchain buffers or changing callbacks.
     swapchainSmokeDrain(gpu, api, swapContext);
+    for (UINT bufferIndex = 0; bufferIndex < description.BufferCount; ++bufferIndex) {
+        ComPtr<ID3D12Resource> presented;
+        check(swapchain->GetBuffer(bufferIndex, IID_PPV_ARGS(&presented)),
+              "swapchain GetBuffer for UI readback");
+        auto readback = makeReadback(gpu, presented.Get());
+        gpu.begin();
+        transition(gpu.list.Get(), presented.Get(), D3D12_RESOURCE_STATE_PRESENT,
+                   D3D12_RESOURCE_STATE_COPY_SOURCE);
+        copyToReadback(gpu.list.Get(), presented.Get(), readback);
+        transition(gpu.list.Get(), presented.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
+                   D3D12_RESOURCE_STATE_PRESENT);
+        gpu.submit();
+        inspectSwapchainUi(readback);
+    }
     configure.frameGenerationEnabled = false;
     requireFfx(api.configure(&context, &configure.header),
                FFX_API_RETURN_OK, path, "disable FG");
     swapchainSmokeDrain(gpu, api, swapContext);
 
-    const LONG calls = InterlockedCompareExchange(&callbacks.calls, 0, 0);
-    const LONG successes =
+    const LONG oldCalls = InterlockedCompareExchange(&callbacks.calls, 0, 0);
+    const LONG oldSuccesses =
         InterlockedCompareExchange(&callbacks.successes, 0, 0);
-    const LONG generated =
+    const LONG oldGenerated =
         InterlockedCompareExchange(&callbacks.generated, 0, 0);
+    const LONG replacementCalls =
+        InterlockedCompareExchange(&replacementCallbacks.calls, 0, 0);
+    const LONG replacementSuccesses =
+        InterlockedCompareExchange(&replacementCallbacks.successes, 0, 0);
+    const LONG replacementGenerated =
+        InterlockedCompareExchange(&replacementCallbacks.generated, 0, 0);
+    const LONG calls = oldCalls + replacementCalls;
+    const LONG successes = oldSuccesses + replacementSuccesses;
+    const LONG generated = oldGenerated + replacementGenerated;
+    require(oldCalls == oldCallsAfterReplacement, path,
+            "retired callback binding was invoked again");
+    require(replacementCalls > 0, path,
+            "replacement callback binding was never invoked");
     require(calls >= 3 && successes == calls && generated >= 3, path,
             "insufficient successful real interpolation callbacks");
+
+    auto* oldOutput = static_cast<ID3D12Resource*>(
+        InterlockedExchangePointer(&callbacks.generatedOutput, nullptr));
+    auto* replacementOutput = static_cast<ID3D12Resource*>(
+        InterlockedExchangePointer(
+            &replacementCallbacks.generatedOutput, nullptr));
+    if (oldOutput) oldOutput->Release();
+    if (replacementOutput) replacementOutput->Release();
+    CloseHandle(callbacks.callbackEntered);
+    CloseHandle(callbacks.callbackRelease);
 
     requireFfx(api.destroy(&context, nullptr), FFX_API_RETURN_OK,
                path, "destroy FG");
@@ -853,17 +1566,31 @@ int main() {
 
     {
         Gpu gpu;
-        runProvider(gpu, api, false);
+        // The game supplies reversed finite plane distances in SDK order.
+        // Exercise that contract first so a rejection cannot hide behind a
+        // previously selected provider, then retain the ascending finite case.
+        runProvider(gpu, api, ProviderOptions{.finiteDepthReversed = true});
+        runProvider(gpu, api);
+        runProvider(gpu, api, ProviderOptions{.cameraAbsent = true});
+        runProvider(gpu, api, ProviderOptions{
+            .cameraAbsent = true, .preselectionRejections = true});
 
-        // Exercise native routing through the same builtin's public override
-        // chain. Do not load a second DLL or alter production environment state.
-        runProvider(gpu, api, true);
-        runProvider(gpu, api, false, true);
+        // Exercise native routing through both an explicit override and a
+        // genuine unsupported MetalFX feature. The distortion field is a valid
+        // zero-offset RG resource, not a malformed-descriptor shortcut.
+        runProvider(gpu, api, ProviderOptions{.native = true});
+        runProvider(gpu, api, ProviderOptions{.hudless = true});
+        runProvider(gpu, api, ProviderOptions{.distortionFallback = true});
+        runProvider(gpu, api, ProviderOptions{.displayJitter = true});
+        runProvider(gpu, api, ProviderOptions{.transfer = TransferCase::PQ});
+        runProvider(gpu, api, ProviderOptions{.transfer = TransferCase::ScRgb});
         runSwapchain(gpu, api);
     }
 
     FreeLibrary(module);
     std::printf("FSR_FRAMEGENERATION_D3D12_PASS "
-                "builtinIntermediates=4 nativeIntermediates=4 fallbackIntermediates=4\n");
+                "builtin=4 cameraV1Absent=4 preselectionRejections=4 native=4 "
+                "hudlessRectUi=4 distortionFallback=4 displayJitter=4 pq=4 "
+                "scrgb=4 finiteDepthReversed=4 swapchainUiReadback=3\n");
     return 0;
 }
