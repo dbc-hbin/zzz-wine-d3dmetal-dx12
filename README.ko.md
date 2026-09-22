@@ -90,11 +90,14 @@ v1.1.0 공개 런타임은 그래픽 어댑터를 **AMD Radeon RX 9070**(`0x1002
 
 macOS 27 / Apple M5 Pro에서 다음을 확인했습니다.
 
+- **v1.1.1은 등록 실패를 수정했습니다.** 이 설치기가 이미 등록한 Yaagl frontend인데 hash 기반 복원 백업이 사라진 경우 “changed without a matching backup”으로 거부되던 문제입니다. 이제 등록 시 해당 frontend에서 이 설치기 자신의 updater hook과 catalog 항목만 제거해 marker 없는 복원 기준을 복구하며, 무관한 catalog 항목·frontend 버전·local-archive 설치 경로는 유지합니다. 인식할 수 없거나 변조된 hook은 frontend를 건드리지 않고 그대로 실패합니다. Wine 런타임 바이트는 v1.1.0과 동일합니다.
+- 보고된 상태의 사본으로 재현했습니다. v1.1.0 helper는 보고된 메시지와 함께 종료 코드 1로 실패하고 아무것도 바꾸지 않았고, v1.1.1 helper는 완료해 복구 기준을 기록하면서 등록된 frontend를 바이트 그대로 유지했습니다. 이미 등록된 바이트를 다시 등록해도 변화가 없으며, hook 인자를 변조하면 여전히 종료 코드 1로 실패하고 frontend는 보존됩니다.
 - 최종 전체 런타임 아카이브를 다시 추출해 Metal4와 legacy command-buffer 양쪽에서 FSR 업스케일링·프레임 생성 GPU 검사를 통과했습니다. 이 검사에는 Metal API Validation을 활성화했습니다.
 - 일반 실행 환경에서 DX12 그래픽·컴퓨트·레이 트레이싱 GPU readback을 통과했습니다. direct/indirect draw, blending, logic operation, MSAA 및 동일·상이 descriptor의 독립 D3D12 객체를 포함합니다.
 - MetalFX backend, quality, transport, legacy-transport 네이티브 suite를 통과했습니다. 네이티브 cache/stage-cache/key 검사는 graphics·compute·RT key 경로의 single-flight와 객체 재사용을 확인했습니다. production hit counter는 노출되지 않으며 측정했다고 주장하지 않습니다. production launcher의 실제 DXGI 열거 결과는 `0x1002:0x7550`, **AMD Radeon RX 9070**이었습니다.
 - core/backend 아카이브를 재조립한 결과 파일 목록·바이트·모드·symlink가 staging과 일치했습니다. 서명과 격리된 Wine 초기화도 통과했습니다. 선언된 tuned Wine core 산출물 45개는 검증된 v1.0.5 base와 바이트가 같으며 FSR/native overlay를 새로 빌드했습니다.
 - v1.1.0 설치 ZIP을 다시 추출해 deep/strict 서명을 확인하고 실제 보존한 v1.0.5 아카이브로 설치·업데이트·복원·활성화 실패 시나리오 9개를 통과했습니다. DX12 실행 인자 회귀 3개와 경로를 옮긴 FSR launcher 회귀도 통과했습니다.
+- v1.1.1 설치 ZIP은 deep/strict 서명을 통과했고, 변경되지 않은 v1.1.0 런타임을 포함하며, 백업 유실 복구 시나리오를 포함한 리소스 수명주기 10개 시나리오를 모두 통과했습니다.
 - 커서 소유권·RawInput 소스 harness와 격리된 Win32 cold-start/layered-window 커서 metadata 검사를 통과했습니다. 네이티브 커서 픽셀이나 물리 RawInput을 측정한 결과는 아닙니다.
 
 **한계:** macOS 26 실기기 실행, 네이티브 커서 픽셀, 첫 물리 RawInput delta는 미검증입니다. Apple 원본 `libdxccontainer.dylib`는 변경하지 않았으며 최소 버전 26.4를 기록합니다. 선택적 Metal API Validation을 켠 generic MSAA resolve 대조 검사에서는 원본 v1.0.5와 v1.1.0 모두 동일한 render-target-usage assertion이 발생합니다. 이 기존 validation 제약을 수정했다고 주장하지 않으며 일반 실행 환경의 GPU readback은 통과했습니다. 위의 프레임 생성 화질·성능 검증 한계도 그대로 적용됩니다.

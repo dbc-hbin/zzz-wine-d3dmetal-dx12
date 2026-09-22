@@ -29,7 +29,7 @@ public struct AsarPatcher {
         let size: Int
     }
 
-    public static func patch(sourcePath: String, outputPath: String, archivePath: String, displayName: String) throws {
+    public static func patch(sourcePath: String, outputPath: String, archivePath: String, displayName: String, recoveringRegistration: Bool = false) throws {
         let sourceURL = URL(fileURLWithPath: sourcePath)
         let sourceData = try Data(contentsOf: sourceURL)
         let headerSize = try uint32(sourceData, at: 8, description: "header size")
@@ -70,7 +70,7 @@ public struct AsarPatcher {
             }
             frontendMatched = true
 
-            let transformed = try transform(javascript, in: context, archiveURL: archiveURL, archivePath: archivePath, displayName: displayName)
+            let transformed = try transform(javascript, in: context, archiveURL: archiveURL, archivePath: archivePath, displayName: displayName, recoveringRegistration: recoveringRegistration)
             if transformed != javascript {
                 guard replacement == nil else {
                     throw AsarPatcherError.transformFailed("Multiple frontend scripts matched the Wine installer.")
@@ -284,7 +284,7 @@ public struct AsarPatcher {
         throw AsarPatcherError.resourceMissing(resource)
     }
 
-    private static func transform(_ source: String, in context: JSContext, archiveURL: String, archivePath: String, displayName: String) throws -> String {
+    private static func transform(_ source: String, in context: JSContext, archiveURL: String, archivePath: String, displayName: String, recoveringRegistration: Bool) throws -> String {
         let archive = URL(fileURLWithPath: archivePath).standardizedFileURL
         let helper = archive.deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(".zzz-wine-registration/zzz-wine-register")
@@ -293,7 +293,8 @@ public struct AsarPatcher {
             "archivePath": archive.path,
             "protectedRuntimeIds": RuntimePackage.protectedRuntimeIds,
         ]
-        guard let function = context.objectForKeyedSubscript("__asarTransform"), let result = function.call(withArguments: [source, RuntimePackage.targetRuntimeId, displayName, archiveURL, options]) else {
+        let functionName = recoveringRegistration ? "__asarRecoverRegistration" : "__asarTransform"
+        guard let function = context.objectForKeyedSubscript(functionName), let result = function.call(withArguments: [source, RuntimePackage.targetRuntimeId, displayName, archiveURL, options]) else {
             throw AsarPatcherError.transformFailed("Bundled transform did not return a result.")
         }
         if let errorValue = result.forProperty("error"), !errorValue.isUndefined, !errorValue.isNull, let error = errorValue.toString(), !error.isEmpty {

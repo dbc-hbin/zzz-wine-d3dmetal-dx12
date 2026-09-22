@@ -19,6 +19,12 @@ Validates:
 10. Restore on clean upstream preserving current frontend.
 11. Same-ID runtime upgrade replaces a stale target-named cached archive and old Wine tree.
 12. Activation failure restores this attempt's runtime and selection without consuming an older backup.
+13. Registered frontend whose hash-keyed backups were lost (helper still present):
+   - Registration recovers the pristine baseline from the frontend this installer owns,
+     instead of refusing with "changed without a matching backup".
+   - The recovered baseline removes only this installer's own catalog entry/helper marker and
+     preserves every unrelated catalog entry and the frontend version.
+   - Restore on the recovered generation restores that baseline rather than failing.
 """
 
 import argparse
@@ -26,6 +32,7 @@ import hashlib
 import json
 import os
 import pathlib
+import re
 import shutil
 import struct
 import subprocess
@@ -419,14 +426,65 @@ def run_suite(stock_bytes, repo_root, previous_runtime_archive=None):
             "Registration backups were deleted on activation failure!"
         print("  -> PASS: Activation fault restored this attempt's runtime/tag/state and retained the old backup.")
 
+        # -------------------------------------------------------------
+        # Scenario 10: Registered Frontend With Lost Hash-Keyed Backups
+        # -------------------------------------------------------------
+        print("\n[SCENARIO 10] Registered frontend with lost registration backups...")
+        backups_dir = support / ".zzz-wine-registration/backups"
+        shutil.rmtree(backups_dir, ignore_errors=True)
+        support_neu.write_bytes(f32)
+        os.utime(support_neu, (3000, 3000))
+        subprocess.run([str(installer_bin), "--install", "--app-path", str(app), "--support-path", str(support)],
+                       check=True, capture_output=True, text=True, timeout=120)
+        registered_bytes = support_neu.read_bytes()
+        assert b"__yaaglD3MetalUpdate" in registered_bytes, "Install did not register the frontend!"
+        shutil.rmtree(backups_dir, ignore_errors=True)
+        assert not backups_dir.exists(), "Backups directory must be absent for this scenario!"
+
+        res = subprocess.run([str(installer_bin), "--install", "--app-path", str(app), "--support-path", str(support)],
+                             capture_output=True, text=True, timeout=120)
+        assert res.returncode == 0, f"Reinstall refused a registered frontend without backups: {res.stdout}{res.stderr}"
+        assert sha256(support_neu.read_bytes()) == sha256(registered_bytes), \
+            "Recovery replaced an already-registered frontend instead of preserving it."
+
+        recovered_backup = backups_dir / f"{sha256(registered_bytes)}.neu"
+        assert recovered_backup.exists(), "Recovered restore baseline was not recorded under the current resource hash!"
+        recovered_bytes = recovered_backup.read_bytes()
+        assert b"__yaaglD3MetalUpdate" not in recovered_bytes, "Recovered baseline still contains the registration hook!"
+        recovered_version = parse_asar_version(recovered_bytes)
+        assert recovered_version == parse_asar_version(registered_bytes), \
+            "Recovered baseline changed the frontend version!"
+        for entry in ["wine-stable-gcenx-11.0-osx64"]:
+            assert entry.encode() in recovered_bytes, f"Recovered baseline dropped unrelated catalog entry: {entry}"
+        registered_ids = set(re.findall(rb'\{("?)id\1:"([^"]+)",("?)displayName', registered_bytes))
+        recovered_ids = set(re.findall(rb'\{("?)id\1:"([^"]+)",("?)displayName', recovered_bytes))
+        registered_ids = {entry[1] for entry in registered_ids}
+        recovered_ids = {entry[1] for entry in recovered_ids}
+        assert runtime_target_id.encode() in registered_ids, "Install did not register a catalog entry!"
+        assert registered_ids - recovered_ids == {runtime_target_id.encode()}, \
+            f"Recovery changed unrelated catalog entries: {(registered_ids - recovered_ids) - {runtime_target_id.encode()}}"
+        assert not recovered_ids - registered_ids, "Recovery introduced a catalog entry."
+        # The local-archive protected-id list legitimately still names the runtime; only the
+        # catalog entry (already asserted above) must be gone.
+        assert b"__yaaglD3MetalLocalArchive" in recovered_bytes, \
+            "Recovered baseline dropped the local-archive install path."
+        print("  -> PASS: Registration recovered a marker-free baseline preserving other catalog entries.")
+
+        res = subprocess.run([str(installer_bin), "--restore", "--app-path", str(app), "--support-path", str(support)],
+                             capture_output=True, text=True, timeout=120)
+        assert res.returncode == 0, res.stdout + res.stderr
+        assert sha256(support_neu.read_bytes()) == sha256(recovered_bytes), \
+            "Restore did not apply the recovered baseline!"
+        print("  -> PASS: Restore used the recovered baseline instead of failing.")
+
         # Final app immutability verification
         assert sha256(app_neu.read_bytes()) == app_sha_before
         assert legacy_bak.read_bytes() == legacy_marker
         assert legacy_bak.stat().st_mtime == 500.0
-        print("\n[FINAL VERIFICATION] App bundle and legacy backup remained 100% untouched across all 9 scenarios!")
+        print("\n[FINAL VERIFICATION] App bundle and legacy backup remained 100% untouched across all 10 scenarios!")
 
     print("\n====================================================================")
-    print("ALL 9 RESOURCE LIFECYCLE REGRESSION SCENARIOS PASSED SUCCESSFULLY!")
+    print("ALL 10 RESOURCE LIFECYCLE REGRESSION SCENARIOS PASSED SUCCESSFULLY!")
     print("====================================================================")
 
 def main():

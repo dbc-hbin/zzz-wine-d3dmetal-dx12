@@ -506,6 +506,52 @@
     }];
   }
 
+  globalThis.__asarRecoverRegistration = function (source, targetId) {
+    try {
+      var sourceFile = parse(source);
+      var moveCall = findUpdaterCommitMove(sourceFile);
+      var wrapper = recognizeUpdaterWrapper(moveCall, sourceFile);
+      if (!wrapper) throw new Error("Cannot recover an unrecognized registration hook; current resources were preserved");
+      var binary = wrapper.moveAwait.parent;
+      var assignment = binary.left.left;
+      var discovered = discoverExecAndResolve(sourceFile, moveCall.expression.text);
+      var call = wrapper.helperCall;
+      var args = call.arguments.length === 1 && ts.isArrayLiteralExpression(call.arguments[0]) ? call.arguments[0].elements : [];
+      if (!ts.isBinaryExpression(assignment) || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+          !ts.isPropertyAccessExpression(assignment.left) || !isIdentifierNamed(assignment.left.expression, "globalThis") ||
+          assignment.left.name.text !== "__yaaglD3MetalUpdate" || assignment.right.kind !== ts.SyntaxKind.TrueKeyword ||
+          !isIdentifierNamed(call.expression, discovered.execIdent) || args.length !== 5 ||
+          typeof stringLiteralValue(args[0]) !== "string" || !stringLiteralValue(args[0]).endsWith("/.zzz-wine-registration/zzz-wine-register") ||
+          stringLiteralValue(args[1]) !== "--resource-path" || stringLiteralValue(args[3]) !== "--archive-path" ||
+          typeof stringLiteralValue(args[4]) !== "string" || !ts.isCallExpression(args[2]) ||
+          !isIdentifierNamed(args[2].expression, discovered.resolveIdent) || args[2].arguments.length !== 1 ||
+          stringLiteralValue(args[2].arguments[0]) !== "./resources.neu.update") {
+        throw new Error("Cannot recover a modified registration hook; current resources were preserved");
+      }
+      var catalog = findTargetDistribution(sourceFile, targetId);
+      var changes = [{ start: wrapper.wrapperNode.getStart(sourceFile), end: wrapper.wrapperNode.end, replacement: text(wrapper.moveAwait, sourceFile) }];
+      if (catalog.target) {
+        var node = catalog.target.node;
+        var array = catalogArray(catalog.distributions);
+        if (node.parent !== array) throw new Error("Registered Wine is outside the catalog array");
+        var index = array.elements.indexOf(node);
+        var start = node.getStart(sourceFile);
+        var end = node.end;
+        if (index > 0) start = array.elements[index - 1].end;
+        else if (array.elements.length > 1) end = array.elements[1].getStart(sourceFile);
+        changes.push({ start: start, end: end, replacement: "" });
+      }
+      var output = applyChanges(source, changes);
+      var outputFile = parse(output);
+      if (output.includes("__yaaglD3MetalUpdate") || findTargetDistribution(outputFile, targetId).target) {
+        throw new Error("Registration dependencies remain after recovery; current resources were preserved");
+      }
+      return { source: output, changed: true };
+    } catch (error) {
+      return { error: error && error.message ? error.message : String(error) };
+    }
+  };
+
   globalThis.__asarTransform = function (source, targetId, displayName, archiveURL, options) {
     try {
       if (typeof source !== "string" || typeof targetId !== "string" || typeof displayName !== "string" || typeof archiveURL !== "string") throw new Error("transform arguments must be strings");

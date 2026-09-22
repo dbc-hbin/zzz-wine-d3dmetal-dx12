@@ -14,11 +14,16 @@ enum ResourceRegistration {
         let pristine: Data
         if manager.fileExists(atPath: previousBackup.path) {
             pristine = try Data(contentsOf: previousBackup)
+        } else if original.range(of: Data("__yaaglD3MetalUpdate".utf8)) != nil {
+            // Recover from the current frontend, never from an older unrelated backup.
+            // Only our recognized updater hook and catalog entry are removed.
+            let recovery = resource.deletingLastPathComponent().appendingPathComponent(".wine-recovery-\(UUID().uuidString).neu")
+            defer { try? manager.removeItem(at: recovery) }
+            try AsarPatcher.patch(sourcePath: resourcePath, outputPath: recovery.path,
+                                  archivePath: archivePath, displayName: RuntimePackage.targetDisplayName,
+                                  recoveringRegistration: true)
+            pristine = try Data(contentsOf: recovery)
         } else {
-            guard original.range(of: Data("__yaaglD3MetalUpdate".utf8)) == nil else {
-                throw NSError(domain: "Registration", code: 1, userInfo: [NSLocalizedDescriptionKey:
-                    "The registered Yaagl frontend was changed without a matching backup. Its current resources have been preserved. Update Yaagl with an official resource before registering again."])
-            }
             pristine = original
         }
 
