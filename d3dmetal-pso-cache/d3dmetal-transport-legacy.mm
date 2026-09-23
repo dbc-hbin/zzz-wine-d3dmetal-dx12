@@ -406,9 +406,9 @@ bool record(NativeCommandList& commandList, const RecordRequest& request) noexce
 }
 
 bool isRecordedCommand(const void* command) noexcept {
-    if (!command) return false;
+    if (!command || loadAt<std::uint64_t>(command) != kNativeHeader) return false;
     const RecordedCommand value = loadAt<RecordedCommand>(command);
-    if (value.header != kNativeHeader || value.magic != kMagic || !value.owner)
+    if (value.magic != kMagic || !value.owner)
         return false;
     const auto ownerBits = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(value.owner));
     if (value.cookie != (kCookie ^ ownerBits)) return false;

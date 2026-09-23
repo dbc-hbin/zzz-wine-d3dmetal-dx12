@@ -278,6 +278,8 @@ struct State {
     Luid luid{};
     yaagl_fsr_fg_create_packet creation{};
     bool retired = false;
+    // Pending provider selection records its first Prepare before PE replays Configure.
+    bool generationEnabled = true;
     bool hasMode = false;
     Mode mode = Mode::Legacy;
     Object metalDevice;
@@ -1146,6 +1148,26 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
                 state->frames.clear();
                 return finish(Ok);
             }
+            if (operation == YAAGL_FSR_FG_CONFIGURE) {
+                if (header.size != sizeof(yaagl_fsr_fg_configure_packet))
+                    return finish(Parameter);
+                auto state = lookup(header.context);
+                if (!state) return finish(Parameter);
+                std::lock_guard lock(state->mutex);
+                if (state->retired) return finish(Parameter);
+                auto& config = *static_cast<yaagl_fsr_fg_configure_packet*>(arguments);
+                if (config.enabled > 1) return finish(Parameter);
+                state->generationEnabled = config.enabled != 0;
+                if (!state->generationEnabled) {
+                    state->frames.clear();
+                    state->hasPreparedJitter = false;
+                    // Encode owns history under executionMutex, not the registry lock.
+                    std::lock_guard executionLock(state->executionMutex);
+                    state->history = {};
+                    state->historyConfiguration.reset();
+                }
+                return finish(Ok);
+            }
             if (!available()) return finish(Unsupported);
 
             if (operation == YAAGL_FSR_FG_PROBE) {
@@ -1249,13 +1271,10 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
                     p->render_height > state->creation.max_render_height)
                     return finish(Parameter, "prepare_parameters", state->creation.flags);
                 if (state->frames.count(frame)) return finish(Parameter);
-                // Prepare may continue while presentation has FG disabled.
-                // Retire unconsumed metadata; recorded work owns its snapshot separately.
-                if (state->frames.size() >= 64) {
-                    auto oldest = std::min_element(state->frames.begin(), state->frames.end(),
-                        [](const auto& a, const auto& b) { return a.first < b.first; });
-                    state->frames.erase(oldest);
-                }
+                // Prepare may continue while FG is off. Recorded work owns its snapshot,
+                // but disabled presentation cannot consume frame-ID metadata.
+                if (state->generationEnabled && state->frames.size() >= 64)
+                    return finish(Runtime, "prepare_backpressure");
                 addresses = {p->depth, p->motion_vectors, 0};
                 states = {p->depth_state, p->motion_vectors_state, 0};
                 const bool displayMotion = (state->creation.flags &
@@ -1360,7 +1379,7 @@ std::uint32_t api(std::uint32_t operation, void* arguments) noexcept {
              * Insert before recording so allocation failure never leaves an
              * accepted command without its frame-ID registry entry.
              */
-            if (!generate)
+            if (!generate && state->generationEnabled)
                 state->frames.emplace(frame, implementation->snapshot);
             if (!record(list, command, resources, prepared, header.context,
                         frame, addresses, states, resourceCount, generate)) {

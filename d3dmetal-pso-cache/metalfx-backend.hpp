@@ -194,8 +194,9 @@ private:
     std::shared_ptr<Impl> impl_;
 };
 
-// One GPU execution's transient resources. The transport retains the returned
-// lease until the corresponding native allocator is reset after GPU completion.
+// One GPU execution's transient resources, including its scaler generation.
+// The transport retains the returned lease until the corresponding native
+// allocator is reset after GPU completion.
 // Keeping this separate from PreparedFrame prevents resource aliasing when one
 // recorded command is replayed into more than one in-flight command buffer.
 class ExecutionLease final {

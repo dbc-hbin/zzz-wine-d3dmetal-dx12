@@ -85,10 +85,8 @@ def main() -> None:
     })
     if args.command_buffer == "legacy":
         real_wine = runtime / "bin" / "wine.real"
-        last_hop = runtime / "bin" / "yaagl-frame-probe-exec"
-        if not real_wine.is_file() or not last_hop.is_file():
-            raise SystemExit(
-                "legacy mode requires bin/wine.real and bin/yaagl-frame-probe-exec")
+        if not real_wine.is_file():
+            raise SystemExit("legacy mode requires bin/wine.real")
         environment.update({
             "WINE_ENABLE_TIMEOUT_FIX": "1",
             "CX_ACTIVE_GRAPHICS_BACKEND": "d3dmetal",
@@ -98,8 +96,10 @@ def main() -> None:
             "D3DM_DEVICE_ID": "0x7550",
             "D3DM_DEVICE_DESCRIPTION": "AMD Radeon RX 9070",
             "WINEMSYNC": "1",
+            "MTL_CAPTURE_ENABLED": "0",
+            "YAAGL_FSR_FG_NATIVE_DLL": f"Z:{runtime}/lib/wine/x86_64-windows/amd_fidelityfx_framegeneration_dx12_native.dll",
         })
-        run_command = [str(last_hop), str(real_wine), str(executable)]
+        run_command = [str(real_wine), str(executable)]
     else:
         run_command = [str(wine), str(executable)]
     started = time.monotonic()

@@ -48,7 +48,7 @@ static NTSTATUS fsr_fg_api(void *args)
 {
     struct yaagl_fsr_fg_packet_header *header = args;
     if (!header || header->size < sizeof(*header) || header->version != YAAGL_FSR_FG_BRIDGE_VERSION ||
-        header->operation > YAAGL_FSR_FG_DESTROY)
+        header->operation > YAAGL_FSR_FG_CONFIGURE)
         return STATUS_INVALID_PARAMETER;
     load_sidecar();
     if (!sidecar_api)

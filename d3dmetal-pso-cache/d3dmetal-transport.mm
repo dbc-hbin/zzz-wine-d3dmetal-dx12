@@ -299,6 +299,9 @@ bool prepareUses(const RecordRequest& request,
 
 std::mutex gPendingLock;
 std::unordered_map<void*, std::vector<std::weak_ptr<ExecutionSlot>>> gPending;
+// Published under gPendingLock before recorded work can be submitted. The
+// common no-FSR commit path must not lock or probe the registry per buffer.
+std::atomic<bool> gPendingNonempty{false};
 
 void unregisterSlot(const ExecutionSlot* slot) noexcept {
     std::lock_guard<std::mutex> lock(gPendingLock);
@@ -309,7 +312,10 @@ void unregisterSlot(const ExecutionSlot* slot) noexcept {
         const auto value = weak.lock();
         return !value || value.get() == slot;
     });
-    if (entries.empty()) gPending.erase(it);
+    if (entries.empty()) {
+        gPending.erase(it);
+        if (gPending.empty()) gPendingNonempty.store(false, std::memory_order_release);
+    }
 }
 
 struct OwnerState;
@@ -394,6 +400,7 @@ std::shared_ptr<ExecutionSlot> reserveExecutionSlot(OwnerState& owner, void* com
     try {
         std::lock_guard<std::mutex> lock(gPendingLock);
         gPending[commandBuffer].emplace_back(slot);
+        gPendingNonempty.store(true, std::memory_order_release);
     } catch (...) {
         unregisterSlot(slot.get());
         owner.leases->retire(slot.get());
@@ -709,9 +716,9 @@ bool record(NativeCommandList& commandList, const RecordRequest& request) noexce
 }
 
 bool isRecordedCommand(const void* command) noexcept {
-    if (!command) return false;
+    if (!command || loadAt<std::uint32_t>(command) != kRecordedHeader) return false;
     const RecordedCommand value = loadAt<RecordedCommand>(command);
-    if (value.header != kRecordedHeader || value.magic != kRecordedMagic || !value.owner)
+    if (value.magic != kRecordedMagic || !value.owner)
         return false;
     const auto ownerBits = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(value.owner));
     return value.cookie == (kRecordedCookie ^ ownerBits) && value.reserved == 0;
@@ -796,7 +803,7 @@ void commitRecordedBatch(void* queue, void* selector, const void* const* buffers
     // The native worker has already installed its own feedback handler. Attach
     // one strong slot capture per submitted buffer; owner retention is the fallback
     // if handler registration fails or the buffer is not submitted.
-    if (options && buffers) {
+    if (options && buffers && gPendingNonempty.load(std::memory_order_acquire)) {
         if (@available(macOS 26.0, *)) {
             try {
                 for (std::size_t i = 0; i < count; ++i) {
@@ -812,7 +819,11 @@ void commitRecordedBatch(void* queue, void* selector, const void* const* buffers
                                 slot = entries.back().lock();
                                 entries.pop_back();
                             }
-                            if (entries.empty()) gPending.erase(it);
+                            if (entries.empty()) {
+                                gPending.erase(it);
+                                if (gPending.empty())
+                                    gPendingNonempty.store(false, std::memory_order_release);
+                            }
                         }
                         if (!slot) break;
                         @try {

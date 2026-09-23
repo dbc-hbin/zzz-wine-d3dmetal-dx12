@@ -301,6 +301,15 @@ static ffxReturnCode_t bridge_call(void *packet)
     return status ? FFX_API_RETURN_ERROR_RUNTIME_ERROR : header->result;
 }
 
+static ffxReturnCode_t configure_translation(uint64_t context, BOOL enabled)
+{
+    struct yaagl_fsr_fg_configure_packet packet;
+    memset(&packet, 0, sizeof(packet));
+    initialize_packet(&packet.header, sizeof(packet), YAAGL_FSR_FG_CONFIGURE, context);
+    packet.enabled = !!enabled;
+    return bridge_call(&packet);
+}
+
 static ffxReturnCode_t destroy_translation(uint64_t context)
 {
     struct yaagl_fsr_fg_destroy_packet packet;
@@ -366,6 +375,7 @@ static ffxReturnCode_t snapshot_frame_config(
     struct fg_context *context, const struct ffxConfigureDescFrameGeneration *desc)
 {
     struct frame_config_snapshot *snapshot, **link;
+    unsigned count = 0;
 
     if (!desc->frameGenerationEnabled) return FFX_API_RETURN_OK;
 
@@ -387,6 +397,15 @@ static ffxReturnCode_t snapshot_frame_config(
             release_frame_config(context, old);
             return FFX_API_RETURN_OK;
         }
+        ++count;
+    }
+    /* No callback means no safe retirement point. Preserve future frame IDs
+     * and reject further configuration rather than silently remapping them. */
+    if (count >= 64)
+    {
+        LeaveCriticalSection(&context->dispatch_lock);
+        release_frame_config(context, snapshot);
+        return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
     }
     snapshot->next = context->frame_configs;
     context->frame_configs = snapshot;
@@ -407,33 +426,6 @@ static struct frame_config_snapshot *find_frame_config(
             best = snapshot;
     }
     return best;
-}
-
-static void keep_frame_config(struct fg_context *context, uint64_t frame_id)
-{
-    struct frame_config_snapshot **link, *snapshot, *discard = NULL;
-
-    EnterCriticalSection(&context->dispatch_lock);
-    for (link = &context->frame_configs; *link;)
-    {
-        if ((*link)->frame_id == frame_id)
-        {
-            link = &(*link)->next;
-            continue;
-        }
-        snapshot = *link;
-        *link = snapshot->next;
-        snapshot->next = discard;
-        discard = snapshot;
-    }
-    LeaveCriticalSection(&context->dispatch_lock);
-
-    while (discard)
-    {
-        snapshot = discard;
-        discard = discard->next;
-        release_frame_config(context, snapshot);
-    }
 }
 
 /*
@@ -958,6 +950,8 @@ static ffxReturnCode_t dispatch_context(struct fg_context *context,
                                       const ffxDispatchDescHeader *desc)
 {
     ffxReturnCode_t result;
+    BOOL direct_generation = FALSE;
+    uint64_t direct_frame = 0;
 
     if (!in_callback())
     {
@@ -1025,6 +1019,13 @@ static ffxReturnCode_t dispatch_context(struct fg_context *context,
             break;
         case FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION:
             result = translated_dispatch(context, desc);
+            if (result == FFX_API_RETURN_OK && context->native_config_valid &&
+                (context->native_config.flags &
+                 FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY))
+            {
+                direct_generation = TRUE;
+                direct_frame = ((const struct ffxDispatchDescFrameGeneration *)desc)->frameID;
+            }
             break;
         default:
             result = FFX_API_RETURN_ERROR_UNKNOWN_DESCTYPE;
@@ -1032,6 +1033,8 @@ static ffxReturnCode_t dispatch_context(struct fg_context *context,
         }
     }
     LeaveCriticalSection(&context->dispatch_lock);
+    /* Direct dispatch has no generation callback to retire its frame-ID floor. */
+    if (direct_generation) retire_frame_configs(context, direct_frame);
     return result;
 }
 
@@ -1175,6 +1178,11 @@ static ffxReturnCode_t detach_swapchain(struct fg_context *context)
     context->native_config_valid = FALSE;
     release_resource(&context->hudless);
     clear_frame_configs(context);
+    if (context->mode == CONTEXT_METALFX)
+    {
+        native_result = configure_translation(context->translated, FALSE);
+        if (native_result != FFX_API_RETURN_OK) result = native_result;
+    }
     context->enabled = FALSE;
     memset(&context->swapchain_config, 0, sizeof(context->swapchain_config));
     memset(&context->native_config, 0, sizeof(context->native_config));
@@ -1245,15 +1253,27 @@ static ffxReturnCode_t configure_frame_generation(
     {
         if (context->mode == CONTEXT_NATIVE)
             return native.configure(&context->original, &desc->header);
-        result = snapshot_frame_config(context, desc);
-        if (result == FFX_API_RETURN_OK)
+        if (desc->frameGenerationEnabled)
         {
-            store_native_config(context, desc);
-            context->enabled = desc->frameGenerationEnabled;
-            if (!desc->frameGenerationEnabled) clear_frame_configs(context);
-            else keep_frame_config(context, desc->frameID);
+            result = configure_translation(context->translated, TRUE);
+            if (result != FFX_API_RETURN_OK) return result;
         }
-        return result;
+        result = snapshot_frame_config(context, desc);
+        if (result != FFX_API_RETURN_OK)
+        {
+            if (desc->frameGenerationEnabled)
+                configure_translation(context->translated, context->enabled);
+            return result;
+        }
+        if (!desc->frameGenerationEnabled)
+        {
+            result = configure_translation(context->translated, FALSE);
+            if (result != FFX_API_RETURN_OK) return result;
+            clear_frame_configs(context);
+        }
+        store_native_config(context, desc);
+        context->enabled = desc->frameGenerationEnabled;
+        return FFX_API_RETURN_OK;
     }
 
     if (!desc->swapChain) return FFX_API_RETURN_ERROR_PARAMETER;
@@ -1333,13 +1353,27 @@ static ffxReturnCode_t configure_frame_generation(
         return result;
     }
 
-    /*
-     * Publish the immutable frame snapshot before set_config, which may invoke
-     * the generation callback reentrantly.
-     */
+    if (desc->frameGenerationEnabled)
+    {
+        result = configure_translation(context->translated, TRUE);
+        if (result != FFX_API_RETURN_OK)
+        {
+            if (binding_changed) free_memory(context_allocator(context), binding);
+            if (newly_claimed)
+            {
+                clear_swapchain_claim(context);
+                release_swapchain(swapchain);
+            }
+            return result;
+        }
+    }
+
+    /* Publish before set_config, which may invoke a callback reentrantly. */
     result = snapshot_frame_config(context, desc);
     if (result != FFX_API_RETURN_OK)
     {
+        if (desc->frameGenerationEnabled)
+            configure_translation(context->translated, context->enabled);
         if (binding_changed)
             free_memory(context_allocator(context), binding);
         if (newly_claimed)
@@ -1372,6 +1406,8 @@ static ffxReturnCode_t configure_frame_generation(
         if (!swapchain->lpVtbl->wait_for_presents(swapchain))
             return FFX_API_RETURN_ERROR_RUNTIME_ERROR;
         clear_frame_configs(context);
+        result = configure_translation(context->translated, FALSE);
+        if (result != FFX_API_RETURN_OK) return result;
     }
     else if (binding_changed)
     {

@@ -18,6 +18,7 @@
 #include <new>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace yaagl::pso::fsr {
 namespace {
@@ -82,6 +83,20 @@ struct State {
     std::shared_ptr<void> executionDevice;
     std::shared_ptr<metalfx::Feature> backend;
     metalfx::Extent generationOutput{};
+    void* generationDevice = nullptr;
+    void* generationCompiler = nullptr;
+    bool generationNeedsReset = false;
+    struct CachedBackend {
+        metalfx::Extent output{};
+        void* device = nullptr;
+        void* compiler = nullptr;
+        std::shared_ptr<metalfx::Feature> backend;
+    };
+    // Only this context owns cached features: immutable create parameters are shared,
+    // while exact native device/compiler/mode and output dimensions are checked on reuse.
+    // Recorded PreparedFrames retain evicted features independently through GPU work.
+    std::array<CachedBackend, 3> inactiveBackends{};
+    std::size_t nextEviction = 0;
     bool retired = false;
     std::uint32_t debugLevel = 0;
 };
@@ -221,6 +236,7 @@ std::uint32_t destroy(yaagl_fsr_packet_header& packet) {
         std::lock_guard lock(state->mutex);
         state->retired = true;
         state->backend.reset();
+        for (auto& cached : state->inactiveBackends) cached.backend.reset();
         state->executionDevice.reset();
         state->device.reset();
     }
@@ -269,24 +285,55 @@ std::uint32_t dispatch(yaagl_fsr_dispatch_packet& packet) {
     const auto mode = command.native.kind == d3dmetal::CommandListKind::mpl
         ? metalfx::CommandMode::Metal4 : metalfx::CommandMode::Legacy;
     const metalfx::Extent output{frame.backend.outputRect.width, frame.backend.outputRect.height};
-    bool newGeneration = !state->backend || state->generationOutput.width != output.width ||
-                         state->generationOutput.height != output.height;
+    const bool newGeneration = !state->backend || state->generationOutput.width != output.width ||
+                               state->generationOutput.height != output.height ||
+                               state->generationDevice != command.native.device ||
+                               state->generationCompiler != command.native.compiler;
+    if (state->backend && state->backend->mode() != mode) {
+        logEvent("error", state.get(), dispatchID, kParameter, "command_mode_changed");
+        return kParameter;
+    }
     if (newGeneration) {
-        auto createInfo = state->create.backend;
-        createInfo.output = output;
-        metalfx::CreateContext context{command.native.device, command.native.compiler, mode};
-        metalfx::Error backendError;
-        metalfx::IndependentFactoryScope scope;
-        auto backend = metalfx::Feature::create(context, createInfo, &backendError);
-        if (!backend) {
-            const auto result = backendResult(backendError.code);
-            logFailedFrame(state.get(), dispatchID, result, backendError.message.c_str(), packet);
-            return result;
+        bool reused = false;
+        for (auto& cached : state->inactiveBackends) {
+            if (!cached.backend || cached.output.width != output.width ||
+                cached.output.height != output.height ||
+                cached.device != command.native.device ||
+                cached.compiler != command.native.compiler || cached.backend->mode() != mode) continue;
+            state->backend.swap(cached.backend);
+            std::swap(state->generationOutput, cached.output);
+            std::swap(state->generationDevice, cached.device);
+            std::swap(state->generationCompiler, cached.compiler);
+            reused = true;
+            break;
         }
-        state->backend = std::move(backend);
-        state->generationOutput = output;
-        frame.backend.resetHistory = {true, true};
-    } else if (state->backend->mode() != mode) { logEvent("error", state.get(), dispatchID, kParameter, "command_mode_changed"); return kParameter; }
+        if (!reused) {
+            auto createInfo = state->create.backend;
+            createInfo.output = output;
+            metalfx::CreateContext context{command.native.device, command.native.compiler, mode};
+            metalfx::Error backendError;
+            metalfx::IndependentFactoryScope scope;
+            auto backend = metalfx::Feature::create(context, createInfo, &backendError);
+            if (!backend) {
+                const auto result = backendResult(backendError.code);
+                logFailedFrame(state.get(), dispatchID, result, backendError.message.c_str(), packet);
+                return result;
+            }
+            if (state->backend) {
+                state->inactiveBackends[state->nextEviction] =
+                    {state->generationOutput, state->generationDevice,
+                     state->generationCompiler, std::move(state->backend)};
+                state->nextEviction = (state->nextEviction + 1) % state->inactiveBackends.size();
+            }
+            state->backend = std::move(backend);
+            state->generationOutput = output;
+            state->generationDevice = command.native.device;
+            state->generationCompiler = command.native.compiler;
+        }
+        // A retained scaler's history belongs to its previous output run.
+        state->generationNeedsReset = true;
+    }
+    if (state->generationNeedsReset) frame.backend.resetHistory = {true, true};
 
     ResourceScope mapped;
     const std::array<void*, 7> resources{
@@ -337,6 +384,7 @@ std::uint32_t dispatch(yaagl_fsr_dispatch_packet& packet) {
         ? d3dmetal::legacy::record(command.native, request)
         : d3dmetal::record(command.native, request);
     if (!recorded) { logEvent("error", state.get(), dispatchID, kRuntime, "command_record_failed"); return kRuntime; }
+    state->generationNeedsReset = false;
     if (dispatchID <= 120) {
         const auto temporal = prepared->temporalOutputInfo();
         logFrame("dispatch", state.get(), dispatchID, kOk, "ok", packet, &temporal);

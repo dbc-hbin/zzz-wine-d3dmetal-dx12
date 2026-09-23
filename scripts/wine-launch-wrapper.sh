@@ -25,6 +25,19 @@ unset WINEDLLOVERRIDES WINEDLLPATH_PREPEND DXMT_CONFIG DXMT_CONFIG_FILE
 unset DXVK_CONFIG_FILE DXVK_STATE_CACHE_PATH VK_ICD_FILENAMES VK_DRIVER_FILES
 unset DYLD_INSERT_LIBRARIES
 
+# Only the staged FSR runtime carries this manifest. Apply its loader policy
+# here, before every wine.real route, without a second shell exec. The launcher
+# owns MTL_HUD_ENABLED; never override its selection.
+if [ -f "$wine_root/zzz-frame-probe-stage.json" ]; then
+  case "${YAAGL_FSR_UPSCALER:-metalfx}" in
+    metalfx) export WINEDLLOVERRIDES=amd_fidelityfx_upscaler_dx12,amd_fidelityfx_framegeneration_dx12=b ;;
+    native) export WINEDLLOVERRIDES="amd_fidelityfx_upscaler_dx12=n;amd_fidelityfx_framegeneration_dx12=b" ;;
+    *) echo "YAAGL_FSR_UPSCALER must be metalfx or native" >&2; exit 64 ;;
+  esac
+  export MTL_CAPTURE_ENABLED=0
+  export YAAGL_FSR_FG_NATIVE_DLL="Z:$wine_root/lib/wine/x86_64-windows/amd_fidelityfx_framegeneration_dx12_native.dll"
+fi
+
 # P3 packaged runtime only: load bundled MacDeps/GStreamer without build/deps paths.
 # Legacy (non-P3) wrappers must keep prior env behavior unchanged.
 if [ -f "$wine_root/yaagl-wine-p3-runtime.txt" ]; then

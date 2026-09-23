@@ -16,12 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REL = Path('lib/external/D3DMetal.framework/Versions/A')
-# Keep the published filenames so installed staged runtimes remain identifiable.
-HELPER_NAME = 'yaagl-frame-probe-exec'
 STAGE_MANIFEST = 'zzz-frame-probe-stage.json'
-PLAIN_EXEC = 'exec "$real_wine" "$@"'
-HELPER_EXEC = 'exec "$wrapper_dir/' + HELPER_NAME + '" "$real_wine" "$@"'
-STAGE_SCHEMA = 3
+STAGE_SCHEMA = 4
 PLAY_PROFILE = 'play'
 PLAY_MODEL_POLICY = {'all_gpu': 'system-default'}
 FSR_OVERRIDE = 'amd_fidelityfx_upscaler_dx12,amd_fidelityfx_framegeneration_dx12=b'
@@ -40,7 +36,7 @@ FSR_POLICY = {'implementation': 'builtin-fsr-api-to-metalfx-with-metalfx-frame-i
               'upscaler_selection_environment': 'YAAGL_FSR_UPSCALER',
               'default_upscaler': 'metalfx',
               'loader_override': False, 'diagnostic_log_environment': 'YAAGL_FSR_LOG'}
-ARTIFACT_PATHS = ('bin/wine', 'bin/wine.real', 'bin/' + HELPER_NAME,
+ARTIFACT_PATHS = ('bin/wine', 'bin/wine.real',
     str(REL / 'D3DMetal'), str(REL / 'Resources/libYaaglNativePsoCache.dylib'),
     str(REL / 'Resources/libmetalirconverter.dylib'),
     'lib/wine/x86_64-windows/d3d12.dll', 'lib/wine/x86_64-unix/d3d12.so')
@@ -92,20 +88,6 @@ def original_fg_provenance(path: Path) -> dict:
             'source_access': 'read-only', 'loader_override': False}
 
 
-def helper_script() -> str:
-    return '\n'.join([
-        '#!/bin/sh', 'set -eu',
-        'case "${YAAGL_FSR_UPSCALER:-metalfx}" in',
-        '  metalfx) export WINEDLLOVERRIDES=' + FSR_OVERRIDE + ' ;;',
-        '  native) export WINEDLLOVERRIDES="amd_fidelityfx_upscaler_dx12=n;amd_fidelityfx_framegeneration_dx12=b" ;;',
-        '  *) echo "YAAGL_FSR_UPSCALER must be metalfx or native" >&2; exit 64 ;;',
-        'esac',
-        'export MTL_CAPTURE_ENABLED=0',
-        'runtime_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)',
-        f'export YAAGL_FSR_FG_NATIVE_DLL="Z:$runtime_root/{PRIVATE_FG_PATH}"',
-        'exec "$@"', ''])
-
-
 def artifact_problems(runtime: Path, recorded) -> list[str]:
     if not isinstance(recorded, dict) or set(recorded) != set(ARTIFACT_PATHS + FSR_ARTIFACT_PATHS):
         return ['signed artifact inventory is missing or incomplete; restage with current tooling']
@@ -136,9 +118,12 @@ def stage_manifest_report(source: Path) -> list[tuple[str, str]]:
             data.get('model_policy') != PLAY_MODEL_POLICY or data.get('render_size_override') is not False or
             data.get('rendering_changes_by_default') is not True or data.get('dlss_translation') is not False):
         problems.append('unsupported FSR-only rendering policy')
-    helper = source / 'bin' / HELPER_NAME
-    if not helper.is_file() or helper.read_text() != helper_script():
-        problems.append('FSR translator manifest does not match the last-hop helper')
+    launcher = source / 'bin/wine'
+    if (not launcher.is_file() or launcher.read_bytes() != (ROOT / 'scripts/wine-launch-wrapper.sh').read_bytes() or
+            data.get('launcher_policy') != {'path': 'bin/wine', 'game_launch_only': False}):
+        problems.append('FSR translator manifest does not match the integrated launcher')
+    if (source / 'bin/yaagl-frame-probe-exec').exists():
+        problems.append('obsolete FSR launch helper remains in staged runtime')
     fallback = data.get('native_fg_fallback')
     expected_exports = [{'ordinal': ordinal, 'name': name} for ordinal, name in ORIGINAL_FG_EXPORTS]
     if (not isinstance(fallback, dict) or fallback.get('runtime_path') != PRIVATE_FG_PATH or
@@ -232,8 +217,8 @@ def main() -> int:
         p.error('; '.join(failed))
     launcher_path = ROOT / 'scripts/wine-launch-wrapper.sh'
     wrapper = launcher_path.read_text()
-    if not wrapper.startswith('#!') or PLAIN_EXEC not in wrapper:
-        p.error('committed Wine launcher has no recognized wine.real launch hop')
+    if not wrapper.startswith('#!') or 'zzz-frame-probe-stage.json' not in wrapper:
+        p.error('committed Wine launcher has no integrated FSR policy')
     actual = hashlib.sha256(d3dmetal_input.read_bytes()).hexdigest()
     checker = ROOT / 'scripts/d3dmetal-pso-cache-patch.mjs'
     if input_kind == 'pristine':
@@ -247,7 +232,7 @@ def main() -> int:
     fg_provenance = original_fg_provenance(original_fg)
     if a.check:
         print(f'PASS: isolated destination, {input_kind} D3DMetal identity, and pinned native FSR provider verified')
-        print('PASS: source launcher will be replaced with the committed RX 9070 wrapper and portable FSR-only helper')
+        print('PASS: source launcher will be replaced with the committed RX 9070 wrapper and integrated FSR policy')
         print('No changes.')
         return 0
     if platform.system() != 'Darwin':
@@ -262,7 +247,7 @@ def main() -> int:
         run(['ditto', str(source), str(temporary)])
         binary = temporary / REL / 'D3DMetal'
         module = temporary / REL / 'Resources/libYaaglNativePsoCache.dylib'
-        for path in (binary, module, temporary / 'bin/wine', temporary / 'bin' / HELPER_NAME,
+        for path in (binary, module, temporary / 'bin/wine',
                      *(temporary / relative for relative in FSR_ARTIFACT_PATHS)):
             if not under(path, temporary):
                 raise RuntimeError(f'copied runtime contains an external replacement symlink: {path}')
@@ -294,10 +279,9 @@ def main() -> int:
         inspection = json.loads(subprocess.check_output(['node', str(checker), 'inspect', str(binary)], text=True))
         if inspection.get('mode') not in ('patched', 'patched-signed'):
             raise RuntimeError('post-signature D3DMetal byte-span validation failed')
-        helper = temporary / 'bin' / HELPER_NAME
-        helper.write_text(helper_script())
-        helper.chmod(0o755)
-        (temporary / 'bin/wine').write_text(wrapper.replace(PLAIN_EXEC, HELPER_EXEC))
+        # Old staged sources may carry the obsolete helper; the new launcher never calls it.
+        (temporary / 'bin/yaagl-frame-probe-exec').unlink(missing_ok=True)
+        (temporary / 'bin/wine').write_text(wrapper)
         (temporary / 'bin/wine').chmod(0o755)
         manifest = {
             'stage_schema': STAGE_SCHEMA, 'profile': PLAY_PROFILE, 'diagnostic_only': False,
@@ -305,7 +289,7 @@ def main() -> int:
             'model_policy': PLAY_MODEL_POLICY.copy(), 'dlss_translation': False,
             'source_runtime': str(source), 'source_launcher': {
                 'path': 'scripts/wine-launch-wrapper.sh', 'sha256': hashlib.sha256(wrapper.encode()).hexdigest()},
-            'launcher_helper': {'path': 'bin/' + HELPER_NAME, 'game_launch_only': False},
+            'launcher_policy': {'path': 'bin/wine', 'game_launch_only': False},
             'd3dmetal_input': {'kind': input_kind, 'sha256': actual}, 'binary_inspection': inspection,
             'native_build_manifest': json.loads((build / 'build-manifest.json').read_text()),
             'fsr_build_manifest': json.loads((fsr_build / 'build-manifest.json').read_text()),

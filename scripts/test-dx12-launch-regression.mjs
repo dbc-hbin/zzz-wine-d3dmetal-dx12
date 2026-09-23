@@ -331,6 +331,12 @@ test("v1.0.5 forced DX12 upgrade migrates only an absent preference and preserve
 
   const upgraded = transformSource(transformer, historical);
   const target = catalogEntries(transformer.ts, upgraded.source).find(entry => entry.id === targetId);
+  const priorOnStorage = new Map([["config_use_d3d12", "true"]]);
+  const priorOn = await settingHarness(transformer.ts, upgraded.source, target, priorOnStorage);
+  assert.equal(priorOn.config.useD3D12, true, "old explicit ON must survive the upgrade");
+  assert.equal(priorOnStorage.get("config_use_d3d12"), "true");
+  for (const steam of [false, true]) await assertLaunchArguments(transformer.ts, upgraded.source, target, steam, priorOn.config.useD3D12, 1);
+
   const priorOffStorage = new Map([["config_use_d3d12", "false"]]);
   const priorOff = await settingHarness(transformer.ts, upgraded.source, target, priorOffStorage);
   assert.equal(priorOff.config.useD3D12, false, "old explicit OFF must survive the upgrade");

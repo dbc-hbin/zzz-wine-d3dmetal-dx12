@@ -367,6 +367,7 @@ struct Feature::Impl {
 };
 
 struct ExecutionLease::Impl {
+    std::shared_ptr<ScalerGeneration> generation;
     id<MTLTexture> privateOutput = nil;
     id<MTLTexture> convertedExposure = nil;
     id<MTLTexture> linearColor = nil;
@@ -1779,6 +1780,7 @@ bool PreparedFrame::encode(void* commandBuffer, void* fencePointer,
             lease = makeLease(*impl_, error);
             if (!lease) return false;
         }
+        lease->generation = impl_->generation;
         lease->fence = retainObject(asFence(fencePointer));
 
         // Publish ownership before recording any command. Keep this non-null

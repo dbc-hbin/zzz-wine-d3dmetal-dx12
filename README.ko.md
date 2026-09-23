@@ -41,11 +41,12 @@ CLI에서는 글로벌 베타에 `--app-path "/Applications/Yaagl ZZZ OS DX12 Be
 
 ### FSR 업스케일링 → MetalFX
 
-- 실행 wrapper는 공개 그래픽 식별자를 AMD Radeon RX 9070(`0x1002:0x7550`)으로 고정합니다. NVIDIA 어댑터로 위장하지 않습니다. FSR staging helper는 호출자의 `MTL_HUD_ENABLED` 값(미설정 또는 빈 값 포함)을 그대로 전달합니다. 새로 staging한 런타임을 진단할 때는 Metal HUD를 명시적으로 켜야 합니다.
+- 실행 wrapper는 공개 그래픽 식별자를 AMD Radeon RX 9070(`0x1002:0x7550`)으로 고정합니다. NVIDIA 어댑터로 위장하지 않습니다. 현재 staging wrapper는 별도 helper 없이 FSR을 선택하고 Yaagl의 `MTL_HUD_ENABLED` 선택(미설정·빈 값 포함)을 보존합니다. 기존 v1.1.x 배포 archive에는 HUD를 강제로 켜는 구 helper가 남아 있으므로 새 런타임으로 교체해야 이 동작이 적용됩니다.
 - builtin `amd_fidelityfx_upscaler_dx12` 모듈이 공개 FSR API 경계를 구현하고 허용된 temporal-upscaling 작업을 MetalFX로 번역합니다. AMD FSR4 신경망을 실행하지 않습니다.
 - 새로 staging한 런타임에서는 `YAAGL_FSR_UPSCALER=metalfx`(미설정·빈 값도 기본값)가 builtin 업스케일러를, `YAAGL_FSR_UPSCALER=native`가 게임의 원본 canonical 업스케일러 DLL을 선택합니다. native 선택 시 builtin으로 fallback하지 않습니다. 이 명시적 SR 비교 옵션은 실행 wrapper를 통과하며 프레임 생성 provider 정책은 바꾸지 않습니다. 다른 값은 Wine 실행 전에 오류로 종료합니다. 기존 배포 archive에는 다시 빌드하기 전까지 반영되지 않습니다.
 - Native AA와 Quality, Balanced, Performance, Ultra Performance 모드는 게임/provider가 명시적으로 선택합니다. 번역기가 임의로 품질 모드를 선택하지 않습니다. 요청이 MetalFX 최대 temporal 배율을 넘으면 MetalFX 출력을 하나의 균일 배율로 제한해 caller의 출력 텍스처 가운데에 배치하고 주변 texel은 보존합니다.
 - 명시적인 OFF 선택은 게임 설정을 그대로 따릅니다. 런타임이 업스케일링이나 프레임 생성을 자동으로 켜지 않습니다.
+- 새로 staging한 런타임은 출력 크기가 반복 변경될 때 FSR context당 비활성 temporal scaler를 최대 3개 보유합니다. 이전 크기로 돌아가면 temporal history를 reset합니다. 처음 보는 크기는 여전히 scaler를 생성하므로 MetalFX/driver가 계상하는 메모리가 증가할 수 있습니다.
 - 모든 Mac에서 시스템 기본 MetalFX temporal 모델을 사용합니다. 하드웨어 이름 추정, BBR 강제 정책 또는 비공개 모델 버전 override는 없습니다.
 - FSR exposure, reactive/composition mask, transfer function, sharpening, reset, jitter, motion-vector scale 및 활성 입출력 범위를 명시적으로 번역합니다. 잘못되거나 지원하지 않는 계약은 성공 no-op으로 처리하지 않고 오류를 반환합니다.
 
@@ -56,6 +57,7 @@ CLI에서는 글로벌 베타에 `--app-path "/Applications/Yaagl ZZZ OS DX12 Be
 - 명시적인 native provider 선택은 native 경로를 유지합니다. 번역할 수 없는 입력은 MetalFX 작업을 기록하기 전에 원본 provider로 fallback합니다. MetalFX가 해당 frame의 작업을 기록한 뒤 오류가 발생해도 두 번째 native interpolation을 실행하지 않습니다.
 - 패키지 런타임은 private 읽기 전용 native fallback을 절대 경로로 연결해 canonical DLL 재귀 로드를 막습니다. 원본 loader와 native fallback은 override하지 않습니다.
 - 명시적인 OFF 상태는 그대로 꺼진 상태입니다. HUD label이 남았다는 사실만으로 프레임 생성이 계속됐다고 판단할 수 없습니다.
+- 새로 staging한 런타임은 프레임 생성 presentation을 끄면 소비되지 않은 frame metadata를 비웁니다. 이미 기록된 GPU 작업은 완료까지 자체 resource를 보유합니다. ON에서 서로 다른 미완료 frame 설정은 최대 64개를 허용하며, 완료 콜백이 정리하기 전의 추가 설정은 HUD-less resource를 무한히 보유하는 대신 runtime error를 반환합니다.
 
 ### 번역 계약 상세
 

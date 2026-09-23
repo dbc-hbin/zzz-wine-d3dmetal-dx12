@@ -241,6 +241,7 @@ struct ProviderOptions {
     bool distortionFallback = false;
     bool cameraAbsent = false;
     bool preselectionRejections = false;
+    bool longDirectSequence = false;
     TransferCase transfer = TransferCase::SDR;
 };
 
@@ -423,7 +424,8 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api,
                  const ProviderOptions& options = {}) {
     const bool native = options.native;
     const bool hudless = options.hudless;
-    const char* const path = hudless ? "metalfx-hudless-rect-ui" :
+    const char* const path = options.longDirectSequence ? "metalfx-direct-retirement" :
+        hudless ? "metalfx-hudless-rect-ui" :
         options.preselectionRejections ? "metalfx-preselection-rejections" :
         options.cameraAbsent ? "metalfx-camera-v1-absent" :
         options.finiteDepthReversed ? "metalfx-finite-depth-reversed" :
@@ -554,7 +556,8 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api,
         std::vector<std::uint16_t> previous;
         // The measured MetalFX reset sequence needs two further warm-up frames.
         // Verify writes throughout warm-up and actual interpolation thereafter.
-        for (unsigned step = 0; step < 5; ++step, ++frameID) {
+        for (unsigned step = 0; step < (options.longDirectSequence && !pattern ? 70u : 5u);
+             ++step, ++frameID) {
             const bool implicitGap = options.displayJitter &&
                 pattern == 1 && step == 0;
             const bool reset = step == 0 && !implicitGap;
@@ -890,11 +893,15 @@ void runProvider(Gpu& gpu, const FrameGenerationApi& api,
             gpu.submit();
             check(gpu.device->GetDeviceRemovedReason(),
                   "framegeneration GPU completion");
-            inspectOutput(readback, pattern, step, previous, current, path, hudless,
-                          options.transfer, implicitGap);
-            if (step >= 3)
-                ++verifiedIntermediates;
+            if (!options.longDirectSequence || step < 5) {
+                inspectOutput(readback, pattern, step, previous, current, path, hudless,
+                              options.transfer, implicitGap);
+                if (step >= 3) ++verifiedIntermediates;
+            }
             previous = current;
+            // The direct dispatch completed and retired its frame-ID snapshot.
+            // Do not retain 70 sets of application resources in this boundary test.
+            if (options.longDirectSequence) resources.clear();
         }
     }
 
@@ -1117,7 +1124,7 @@ void swapchainSmokePump(HWND window) {
             "presentation window was destroyed");
 }
 
-void inspectSwapchainUi(const ReadbackTexture& readback) {
+void inspectSwapchainUi(const ReadbackTexture& readback, UINT lastFrame) {
     void* mapping = nullptr;
     D3D12_RANGE readRange{0, static_cast<SIZE_T>(readback.size)};
     check(readback.buffer->Map(0, &readRange, &mapping),
@@ -1125,7 +1132,7 @@ void inspectSwapchainUi(const ReadbackTexture& readback) {
     const auto* bytes = static_cast<const std::uint8_t*>(mapping);
     double bestSingle = 1e9;
     double bestDouble = 1e9;
-    for (unsigned phase = 138; phase <= 156; ++phase) {
+    for (unsigned phase = 2 * (lastFrame - 9); phase <= 2 * lastFrame; ++phase) {
         const float time = static_cast<float>(phase) * 0.5f;
         double singleError = 0.0;
         double doubleError = 0.0;
@@ -1161,7 +1168,8 @@ void inspectSwapchainUi(const ReadbackTexture& readback) {
 
 void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
     const char* const path = "swapchain";
-    constexpr UINT disabledFrames = 70;
+    // Exceed the former 64-snapshot ceiling (64 RGBA16F textures ~= 120 MiB).
+    constexpr UINT disabledFrames = 128;
     constexpr UINT overlapFrame = disabledFrames + 3;
     constexpr UINT frameCount = disabledFrames + 8;
     constexpr DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -1489,7 +1497,7 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
         transition(gpu.list.Get(), presented.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE,
                    D3D12_RESOURCE_STATE_PRESENT);
         gpu.submit();
-        inspectSwapchainUi(readback);
+        inspectSwapchainUi(readback, frameCount);
     }
     configure.frameGenerationEnabled = false;
     requireFfx(api.configure(&context, &configure.header),
@@ -1516,6 +1524,26 @@ void runSwapchain(Gpu& gpu, const FrameGenerationApi& api) {
             "replacement callback binding was never invoked");
     require(calls >= 3 && successes == calls && generated >= 3, path,
             "insufficient successful real interpolation callbacks");
+
+    // With no Present/callback to retire these IDs, preserve all 64 future
+    // configurations and fail the next one instead of silently rebinding it.
+    configure.frameGenerationEnabled = true;
+    configure.HUDLessColor = ffxApiGetResourceDX12(
+        ui.Get(), FFX_API_RESOURCE_STATE_COMPUTE_READ);
+    for (UINT pending = 0; pending < 64; ++pending) {
+        configure.frameID = 10000 + pending;
+        requireFfx(api.configure(&context, &configure.header),
+                   FFX_API_RETURN_OK, path, "queue future FG config");
+    }
+    configure.frameID = 10063;
+    requireFfx(api.configure(&context, &configure.header),
+               FFX_API_RETURN_OK, path, "replace same frame at capacity");
+    configure.frameID = 10064;
+    requireFfx(api.configure(&context, &configure.header),
+               FFX_API_RETURN_ERROR_RUNTIME_ERROR, path, "future FG backpressure");
+    configure.frameGenerationEnabled = false;
+    requireFfx(api.configure(&context, &configure.header),
+               FFX_API_RETURN_OK, path, "clear queued FG configs");
 
     auto* oldOutput = static_cast<ID3D12Resource*>(
         InterlockedExchangePointer(&callbacks.generatedOutput, nullptr));
@@ -1570,6 +1598,8 @@ int main() {
         // Exercise that contract first so a rejection cannot hide behind a
         // previously selected provider, then retain the ascending finite case.
         runProvider(gpu, api, ProviderOptions{.finiteDepthReversed = true});
+        runProvider(gpu, api, ProviderOptions{.finiteDepthReversed = true,
+                                               .longDirectSequence = true});
         runProvider(gpu, api);
         runProvider(gpu, api, ProviderOptions{.cameraAbsent = true});
         runProvider(gpu, api, ProviderOptions{
@@ -1591,6 +1621,6 @@ int main() {
     std::printf("FSR_FRAMEGENERATION_D3D12_PASS "
                 "builtin=4 cameraV1Absent=4 preselectionRejections=4 native=4 "
                 "hudlessRectUi=4 distortionFallback=4 displayJitter=4 pq=4 "
-                "scrgb=4 finiteDepthReversed=4 swapchainUiReadback=3\n");
+                "scrgb=4 finiteDepthReversed=4 directRetirement=4 swapchainUiReadback=3\n");
     return 0;
 }

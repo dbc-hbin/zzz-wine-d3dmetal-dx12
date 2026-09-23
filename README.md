@@ -41,11 +41,12 @@ For a beta CLI install, pass `--app-path "/Applications/Yaagl ZZZ OS DX12 Beta.a
 
 ### FSR upscaling to MetalFX
 
-- The launch wrapper fixes the public graphics identity to AMD Radeon RX 9070 (`0x1002:0x7550`). It does not spoof an NVIDIA adapter. The FSR staging helper leaves the caller's `MTL_HUD_ENABLED` unchanged (including unset or empty); enable the Metal HUD explicitly when diagnosing a newly staged runtime.
+- The launch wrapper fixes the public graphics identity to AMD Radeon RX 9070 (`0x1002:0x7550`). It does not spoof an NVIDIA adapter. The current staged wrapper applies FSR selection without a second helper and preserves Yaagl's `MTL_HUD_ENABLED` choice (including unset or empty). Published v1.1.x archives still contain the older helper that forces the HUD on; they must be replaced to gain this behavior.
 - The builtin `amd_fidelityfx_upscaler_dx12` module implements the public FSR API boundary and translates accepted temporal-upscaling work to MetalFX. It does not execute AMD's FSR4 neural network.
 - In newly staged runtimes, `YAAGL_FSR_UPSCALER=metalfx` (also the unset/empty default) selects that builtin upscaler; `YAAGL_FSR_UPSCALER=native` selects the game's original canonical upscaler DLL without a builtin fallback. This explicit SR comparison option survives the launch wrapper; it does not change the frame-generation provider policy. Other values stop before Wine launches. Existing release archives do not gain this option until rebuilt.
 - Native AA and the Quality, Balanced, Performance, and Ultra Performance modes remain explicit game/provider choices. The translator does not silently select a quality mode. When a request exceeds MetalFX's maximum temporal scale, the MetalFX output is capped to a single uniform scale, centered in the caller's own output texture, and the surrounding texels are preserved.
 - The game remains the source of truth for an explicit OFF selection. The runtime does not auto-enable upscaling or frame generation.
+- Newly staged runtimes retain at most three inactive temporal scalers per FSR context for repeated output-size changes. Switching back resets temporal history; previously unseen sizes still create a scaler and may increase MetalFX/driver-accounted memory.
 - All Macs use the system-default MetalFX temporal model. There is no hardware-name heuristic, mandatory BBR policy, or private model-version override.
 - FSR exposure, reactive/composition masks, transfer functions, sharpening, reset, jitter, motion-vector scale, and active input/output extents are translated explicitly. Invalid or unsupported contracts return an error instead of becoming successful no-ops.
 
@@ -56,6 +57,7 @@ For a beta CLI install, pass `--app-path "/Applications/Yaagl ZZZ OS DX12 Beta.a
 - Explicit native-provider selection stays native. Unsupported translation contracts fall back to the original provider before MetalFX records work. Once MetalFX has recorded work for a frame, an error does not run a second native interpolation pass.
 - The packaged runtime binds its private, read-only native fallback by absolute path, preventing recursive canonical DLL loading. The original loader and native fallback are not overridden.
 - An explicit OFF state remains off. A lingering HUD label is not evidence that frame generation continued.
+- Newly staged runtimes clear unconsumed frame-generation metadata when presentation is disabled. Recorded GPU work keeps its own resources until completion. With generation enabled, 64 distinct pending frame configurations are allowed; further configurations return a runtime error until a completion retires them, rather than retaining HUD-less resources without a bound.
 
 ### Translation contract details
 

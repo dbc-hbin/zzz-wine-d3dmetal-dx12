@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 STAGE_MANIFEST = 'zzz-frame-probe-stage.json'
-STAGE_SCHEMA = 3
+SUPPORTED_STAGE_SCHEMAS = (3, 4)
 GRAPHICS_MANIFEST = 'yaagl-wine-p3-graphics-artifacts.json'
 PROVENANCE_MANIFEST = 'yaagl-wine-p3-provenance.json'
 RUNTIME_MANIFEST = 'yaagl-wine-runtime-files.json'
@@ -96,7 +96,7 @@ def read_stage_manifest(tree: pathlib.Path) -> dict:
     if not path.is_file():
         raise SystemExit(f'missing staged-runtime manifest: {path}')
     data = json.loads(path.read_text(encoding='utf-8'))
-    if data.get('stage_schema') != STAGE_SCHEMA:
+    if data.get('stage_schema') not in SUPPORTED_STAGE_SCHEMAS:
         raise SystemExit(f'unsupported stage schema: {data.get("stage_schema")!r}')
     if data.get('dlss_translation') is not False or data.get('model_policy') != {'all_gpu': 'system-default'}:
         raise SystemExit('staged runtime does not carry the FSR-only system-default policy')
@@ -184,7 +184,7 @@ def refreshed_provenance(tree: pathlib.Path, base: pathlib.Path, graphics: dict,
             changed.append(relative)
     payload['v11RuntimeOverlay'] = {
         'baseRuntime': str(base),
-        'stageSchema': STAGE_SCHEMA,
+        'stageSchema': stage['stage_schema'],
         'stageManifest': STAGE_MANIFEST,
         'stageManifestSha256': digest(tree / STAGE_MANIFEST),
         'dlssTranslation': False,

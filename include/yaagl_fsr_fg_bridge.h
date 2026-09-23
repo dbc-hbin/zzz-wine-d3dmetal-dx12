@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define YAAGL_FSR_FG_BRIDGE_VERSION 2u
+#define YAAGL_FSR_FG_BRIDGE_VERSION 3u
 
 enum yaagl_fsr_fg_create_flags
 {
@@ -19,7 +19,8 @@ enum yaagl_fsr_fg_operation
     YAAGL_FSR_FG_CREATE = 1,
     YAAGL_FSR_FG_PREPARE = 2,
     YAAGL_FSR_FG_DISPATCH = 3,
-    YAAGL_FSR_FG_DESTROY = 4
+    YAAGL_FSR_FG_DESTROY = 4,
+    YAAGL_FSR_FG_CONFIGURE = 5
 };
 
 struct yaagl_fsr_fg_packet_header
@@ -104,6 +105,13 @@ struct yaagl_fsr_fg_dispatch_packet
     int32_t generation_rect_height;
     float min_luminance;
     float max_luminance;
+};
+
+/* Configure changes metadata ownership; recorded commands retain their own snapshots. */
+struct yaagl_fsr_fg_configure_packet
+{
+    struct yaagl_fsr_fg_packet_header header;
+    uint32_t enabled;
 };
 
 struct yaagl_fsr_fg_destroy_packet
