@@ -3,7 +3,10 @@ set -eu
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../../../.." && pwd)"
 SRC="$ROOT/d3dmetal-pso-cache"
 OUT=/tmp/yaagl-sr-transport-memory
-D3DMETAL="$ROOT/build/release-v1.1.0/wine/lib/external/D3DMetal.framework/Versions/A/D3DMetal"
+ARCHIVE="$ROOT/build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz"
+EXTRACT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/yaagl-memory-wine.XXXXXX")
+trap 'rm -rf -- "$EXTRACT_DIR"' EXIT
+trap 'exit 1' HUP INT TERM
 mkdir -p "$OUT"
 python3 - "$SRC/fsr-kernels.metal" "$OUT/fsr-kernels.inc" "$SRC/d3dmetal-transport.native.test.mm" "$OUT/transport-memory-probe.mm" <<'PY'
 import pathlib, sys
@@ -80,5 +83,8 @@ xcrun clang++ -arch x86_64 -std=c++20 -O2 -mmacosx-version-min=14.0 \
   -framework Foundation -framework Metal -framework MetalFX \
   -o "$OUT/transport-memory-probe"
 if [ "${BUILD_ONLY:-0}" != 1 ]; then
+  tar -xJf "$ARCHIVE" -C "$EXTRACT_DIR"
+  D3DMETAL="$EXTRACT_DIR/wine/lib/external/D3DMetal.framework/Versions/A/D3DMetal"
+  if [ ! -f "$D3DMETAL" ]; then echo "Missing archived D3DMetal: $D3DMETAL" >&2; exit 2; fi
   /usr/bin/arch -x86_64 "$OUT/transport-memory-probe" "$D3DMETAL"
 fi

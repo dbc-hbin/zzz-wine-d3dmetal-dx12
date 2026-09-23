@@ -12,14 +12,20 @@ TIMED_PREFIX=${TIMED_PREFIX:-$OUT/metalfx-$VARIANT-prefix}
 TIMING_OUTPUT=${TIMING_OUTPUT:-$OUT/metalfx-d3dmetal-$VARIANT.stdout}
 PATCHED_D3DMETAL=${PATCHED_D3DMETAL:-/tmp/yaagl-lease-commit-D3DMetal}
 LAYOUT_DIR=${LAYOUT_DIR:-/tmp/yaagl-lease-commit-build}
-BASE_WINE="$ROOT/build/release-v1.1.0/wine"
-RUNTIME="$OUT/runtime/wine"
+ARCHIVE="$ROOT/build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz"
+EXTRACT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/yaagl-timing-wine.XXXXXX")
+trap 'rm -rf -- "$EXTRACT_DIR"' EXIT
+trap 'exit 1' HUP INT TERM
+BASE_WINE="$EXTRACT_DIR/wine"
+RUNTIME="$EXTRACT_DIR/runtime/wine"
 CXX=/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++
 
-for file in "$PATCHED_D3DMETAL" "$LAYOUT_DIR/layout.hpp" "$LAYOUT_DIR/fsr-kernels.inc" "$BASE_WINE/bin/wine.real"; do
+for file in "$PATCHED_D3DMETAL" "$LAYOUT_DIR/layout.hpp" "$LAYOUT_DIR/fsr-kernels.inc" "$ARCHIVE"; do
   if [ ! -e "$file" ]; then echo "Missing required isolated timing input: $file" >&2; exit 2; fi
 done
-mkdir -p "$OUT/instrumented" "$OUT/runtime"
+tar -xJf "$ARCHIVE" -C "$EXTRACT_DIR"
+if [ ! -x "$BASE_WINE/bin/wine.real" ]; then echo "Missing archived Wine executable: $BASE_WINE/bin/wine.real" >&2; exit 2; fi
+mkdir -p "$OUT/instrumented"
 python3 "$EVIDENCE/instrument-sr-timing.py" "$ROOT" "$OUT/instrumented"
 
 cd "$ROOT"
@@ -46,10 +52,8 @@ xcrun clang++ -arch x86_64 -std=c++20 -fno-objc-arc -fobjc-exceptions -fblocks \
   "$ROOT/d3dmetal-pso-cache/bridge.mm" \
   -o "$OUT/instrumented/libYaaglNativePsoCache.dylib"
 
-if [ ! -x "$RUNTIME/bin/wine.real" ]; then
-  mkdir -p "$(dirname -- "$RUNTIME")"
-  cp -cR "$BASE_WINE" "$RUNTIME"
-fi
+mkdir -p "$(dirname -- "$RUNTIME")"
+cp -cR "$BASE_WINE" "$RUNTIME"
 D3DMETAL_DEST="$RUNTIME/lib/external/D3DMetal.framework/Versions/A/D3DMetal"
 SIDECAR_DIR="$RUNTIME/lib/external/D3DMetal.framework/Versions/A/Resources"
 if [ ! -e "$D3DMETAL_DEST" ]; then echo "Missing isolated runtime D3DMetal: $D3DMETAL_DEST" >&2; exit 2; fi

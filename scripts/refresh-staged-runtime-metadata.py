@@ -13,8 +13,8 @@ immutable record: every signed artifact it lists is re-hashed from the staged
 tree and must match before anything is written.
 
 usage:
-  python3 scripts/refresh-staged-runtime-metadata.py --tree build/release-v1.1.0/wine \
-      --base build/release-v1.1.0/v1.0.5-base/wine \
+  python3 scripts/refresh-staged-runtime-metadata.py --tree <staged-wine-root> \
+      --base <extracted-v1.0.5-root>/wine \
       --native-manifest build/release-v1.1.0/native-v3/build-manifest.json \
       [--check]
 """
@@ -218,8 +218,8 @@ def write_json(path: pathlib.Path, payload: dict) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--tree', type=pathlib.Path, default=pathlib.Path('build/release-v1.1.0/wine'))
-    parser.add_argument('--base', type=pathlib.Path, default=pathlib.Path('build/release-v1.1.0/v1.0.5-base/wine'))
+    parser.add_argument('--tree', type=pathlib.Path, required=True, help='staged runtime tree to refresh')
+    parser.add_argument('--base', type=pathlib.Path, required=True, help='extracted v1.0.5 baseline wine/ tree')
     parser.add_argument('--native-manifest', type=pathlib.Path,
                         default=pathlib.Path('build/release-v1.1.0/native-v3/build-manifest.json'))
     parser.add_argument('--check', action='store_true', help='verify without writing')

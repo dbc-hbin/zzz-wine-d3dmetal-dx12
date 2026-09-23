@@ -2,15 +2,15 @@
 # Split the verified v1.1.0 FSR-only Wine runtime into a core archive and a
 # D3DMetal overlay. The input tree is only read; no Wine/GPTK build occurs.
 #
-#   package-wine-runtime-split.sh [SOURCE_WINE_ROOT] [OUTPUT_DIR]
+#   package-wine-runtime-split.sh SOURCE_WINE_ROOT OUTPUT_DIR
 #
 # Core archive root: wine/
 # Backend archive root: lib/ (extract this into wine/ before Wine loads).
 set -eu
 
 repo_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-source_root=${1:-"$repo_dir/build/release-v1.1.0/wine"}
-output_dir=${2:-"$repo_dir/build/release-v1.1.0/split"}
+source_root=${1:-}
+output_dir=${2:-}
 
 core_name=wine-11.17-zzz-core-macos26.tar.xz
 backend_name=d3dmetal-gptk4b2-zzz-v1.1.0.tar.xz
@@ -44,7 +44,7 @@ sha256_file() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
 
-[ "$#" -le 2 ] || fail "usage: $0 [SOURCE_WINE_ROOT] [OUTPUT_DIR]"
+[ "$#" -eq 2 ] && [ -n "$source_root" ] && [ -n "$output_dir" ] || fail "usage: $0 SOURCE_WINE_ROOT OUTPUT_DIR"
 [ -d "$source_root" ] || fail "source Wine root is not a directory: $source_root"
 source_root=$(CDPATH= cd -- "$source_root" && pwd)
 mkdir -p "$output_dir"

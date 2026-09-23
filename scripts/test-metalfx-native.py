@@ -123,11 +123,11 @@ def run_suite(suite: str, out: Path, d3dmetal: Path) -> dict[str, object]:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", action="append", choices=tuple(SOURCES))
-    parser.add_argument("--out", type=Path, default=ROOT / "build/fsr4-metalfx/native-tests")
+    parser.add_argument("--out", type=Path, default=ROOT / "build/metalfx-native-tests")
     parser.add_argument(
         "--d3dmetal",
         type=Path,
-        default=ROOT / "build/metalfx-output-contract-20260918/wine-pre-pso/lib/external/D3DMetal.framework/Versions/A/D3DMetal",
+        default=ROOT / "build/release-v1.1.3-local/wine-final/lib/external/D3DMetal.framework/Versions/A/D3DMetal",
     )
     args = parser.parse_args()
     suites = args.suite or list(SOURCES)

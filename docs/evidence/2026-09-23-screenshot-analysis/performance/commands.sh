@@ -1,10 +1,16 @@
 #!/bin/bash
 set -euo pipefail
-ROOT=/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/../../../.." && pwd)"
 EVIDENCE="$ROOT/docs/evidence/2026-09-23-screenshot-analysis/performance"
 TMP=/tmp/yaagl-upscale-cost
 CXX=/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++
-WINE="$ROOT/build/release-v1.1.0/wine/bin/wine"
+ARCHIVE="$ROOT/build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz"
+EXTRACT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/yaagl-upscale-wine.XXXXXX")
+trap 'rm -rf -- "$EXTRACT_DIR"' EXIT
+trap 'exit 1' HUP INT TERM
+tar -xJf "$ARCHIVE" -C "$EXTRACT_DIR"
+WINE="$EXTRACT_DIR/wine/bin/wine"
+if [[ ! -x "$WINE" ]]; then echo "Missing archived Wine executable: $WINE" >&2; exit 2; fi
 OUTPUT="$TMP/fsr-screenshot-bench-stdout"
 mkdir -p "$TMP/native-current-alias" "$TMP/mfx-current-bench" "$OUTPUT"
 cd "$ROOT"

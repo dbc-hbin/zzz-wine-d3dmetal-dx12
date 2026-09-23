@@ -210,21 +210,33 @@ v1.1.1 republishes the v1.1.0 runtime unchanged; only `ZZZWineDX12Installer.zip`
 |`wine-11.17-zzz-core-macos26.tar.xz`|Split core archive (`wine/` root)|
 |`d3dmetal-gptk4b2-zzz-v1.1.0.tar.xz`|Split backend overlay (relative `lib/`)|
 
-Each archive has a `.sha256` sidecar. The installer build expects the full runtime archive at `build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz`.
+Each archive has a `.sha256` sidecar. By default, `installer/build.sh` reads the full runtime archive at `build/release-v1.1.1/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` (override with `RUNTIME_ARCHIVE_SOURCE`).
 
 ```bash
-# Stage a private runtime from a base Wine tree and a validated patched D3DMetal.
-python3 scripts/stage-runtime.py --wine-source <base> --wine-dest <wine-root> \
-  --patched-d3dmetal <patched-D3DMetal> --build-dir <native> --play --fsr-translator
+# Set these to a current stage destination and validated build inputs.
+WINE_ROOT=/absolute/path/to/current-stage/wine
+PATCHED_D3DMETAL=/absolute/path/to/patched-D3DMetal
+NATIVE_BUILD=/absolute/path/to/native-build
+OUTPUT_DIR=/absolute/path/to/split-output
+(
+  set -e
+  base_tmp=$(mktemp -d)
+  trap 'rm -rf -- "$base_tmp"' EXIT
+  tar -xJf build/release-v1.1.0/v1.0.5-original-runtime.tar.xz -C "$base_tmp"
 
-# Refresh inherited P3 metadata for the final staged bytes.
-python3 scripts/refresh-staged-runtime-metadata.py \
-  --tree <wine-root> \
-  --base build/release-v1.1.0/v1.0.5-base/wine \
-  --native-manifest build/release-v1.1.0/native-v3/build-manifest.json
+  # Stage from the extracted v1.0.5 baseline, not the old full v1.1.0 archive.
+  python3 scripts/stage-runtime.py --wine-source "$base_tmp/wine" --wine-dest "$WINE_ROOT" \
+    --patched-d3dmetal "$PATCHED_D3DMETAL" --build-dir "$NATIVE_BUILD" --play --fsr-translator
 
-# Split a staged runtime into the core and backend archives.
-sh scripts/package-wine-runtime-split.sh <wine-root> <output-dir>
+  # Refresh inherited P3 metadata for the final staged bytes.
+  python3 scripts/refresh-staged-runtime-metadata.py \
+    --tree "$WINE_ROOT" --base "$base_tmp/wine" \
+    --native-manifest "$NATIVE_BUILD/build-manifest.json"
+
+  # Split packaging verifies the staged schema-4 tree against current sources.
+  # The retained full v1.1.0 archive is schema 3 and is not a packaging input.
+  sh scripts/package-wine-runtime-split.sh "$WINE_ROOT" "$OUTPUT_DIR"
+)
 ```
 
 The exact archive hashes belong to the parent release notes and are not asserted here.

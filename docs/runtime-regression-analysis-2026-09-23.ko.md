@@ -37,12 +37,15 @@ GitHub Releases API의 asset digest와 로컬 SHA-256이 일치하는 것을 확
 | v1.1.1 full runtime | v1.1.0과 동일 |
 | v1.1.2 full runtime | v1.1.0과 동일 |
 
-로컬 기준:
+분석 당시 로컬 기준:
 
-- `build/release-v1.1.0/v1.0.5-original-runtime.tar.xz`
-- `build/release-v1.1.0/v1.0.5-base/wine/`
-- `build/release-v1.1.0/wine/`
-- `build/release-v1.1.2/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz`
+- `build/release-v1.1.0/v1.0.5-original-runtime.tar.xz` (보존)
+- `build/release-v1.1.0/v1.0.5-base/wine/` (당시 추출본, 정리됨)
+- `build/release-v1.1.0/wine/` (당시 추출본, 정리됨)
+- `build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` (보존)
+- `build/release-v1.1.2/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz` (당시 비교에 사용한 별도 위치)
+
+두 추출 디렉터리는 현재 존재한다고 가정하지 않는다. 다시 비교할 때는 보존된 v1.0.5/v1.1.0 tar를 각각 격리 임시 디렉터리에 `tar -xJf ARCHIVE -C TEMP_DIR`로 풀고 그 안의 `wine/`을 비교한 다음 임시 디렉터리를 지운다. 아래 수치와 경로는 분석 당시 기록이다.
 
 압축파일의 모든 일반 파일을 SHA-256으로 비교하고, 두 추출 디렉터리의 일반 파일이 해당 압축파일과 일치함도 확인했다. 항목 수는 디렉터리를 제외한 일반 파일·링크 기준이다.
 
@@ -115,7 +118,7 @@ v1.0.5 항목도 **현재 게임의 같은 원본 DLL + 과거 Wine 런타임** 
 
 harness SHA-256: `a45109567c7cd6710522aadeb2915174159feaf3d3fb060fa411ddcf524833c0`
 
-위 표는 실행 당시 도구 출력에서 정리한 결과이며 raw stdout 파일을 가장한 것이 아니다. 원래 실험 작업 디렉터리는 `/tmp/yaagl-upscale-cost/`였다. 이 문서와 보존한 source는 임시 디렉터리의 영속성을 전제하지 않는다.
+위 표는 실행 당시 도구 출력에서 정리한 결과이며 raw stdout 파일을 가장한 것이 아니다. 원래 실험 작업 디렉터리는 `/tmp/yaagl-upscale-cost/`였다. 이 문서와 보존한 source는 임시 디렉터리의 영속성을 전제하지 않는다. 보존된 [실행 명령](evidence/2026-09-23-screenshot-analysis/performance/commands.sh)은 v1.1.0 full tar를 격리 임시 디렉터리에 풀어 Wine을 실행하고 추출본을 종료 시 삭제한다. 게임 DLL은 읽기 전용으로 복사하지만 Wine prefix와 결과는 `/tmp/yaagl-upscale-cost/`에 생성된다. 원래 표의 과거 결과가 재실행 결과로 자동 갱신되는 것은 아니다.
 
 ## 3. MetalFX 내부에서 확인한 비용과 한계
 

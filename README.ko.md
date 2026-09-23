@@ -210,21 +210,33 @@ v1.1.1은 v1.1.0 런타임을 그대로 다시 게시하며 `ZZZWineDX12Installe
 |`wine-11.17-zzz-core-macos26.tar.xz`|split core 아카이브(`wine/` 루트)|
 |`d3dmetal-gptk4b2-zzz-v1.1.0.tar.xz`|split backend 오버레이(상대 경로 `lib/`)|
 
-각 아카이브에는 `.sha256` sidecar가 함께 제공됩니다. 설치 프로그램 빌드는 full runtime 아카이브가 `build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz`에 있어야 합니다.
+각 아카이브에는 `.sha256` sidecar가 함께 제공됩니다. `installer/build.sh`는 기본적으로 `build/release-v1.1.1/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz`의 full runtime 아카이브를 읽습니다(`RUNTIME_ARCHIVE_SOURCE`로 변경 가능).
 
 ```bash
-# 기본 Wine 트리와 검증된 patched D3DMetal에서 private 런타임을 staging합니다.
-python3 scripts/stage-runtime.py --wine-source <base> --wine-dest <wine-root> \
-  --patched-d3dmetal <patched-D3DMetal> --build-dir <native> --play --fsr-translator
+# 현재 소스로 staging할 출력 경로와 검증된 빌드 입력을 지정합니다.
+WINE_ROOT=/absolute/path/to/current-stage/wine
+PATCHED_D3DMETAL=/absolute/path/to/patched-D3DMetal
+NATIVE_BUILD=/absolute/path/to/native-build
+OUTPUT_DIR=/absolute/path/to/split-output
+(
+  set -e
+  base_tmp=$(mktemp -d)
+  trap 'rm -rf -- "$base_tmp"' EXIT
+  tar -xJf build/release-v1.1.0/v1.0.5-original-runtime.tar.xz -C "$base_tmp"
 
-# 최종 staging byte에 맞게 상속된 P3 metadata를 갱신합니다.
-python3 scripts/refresh-staged-runtime-metadata.py \
-  --tree <wine-root> \
-  --base build/release-v1.1.0/v1.0.5-base/wine \
-  --native-manifest build/release-v1.1.0/native-v3/build-manifest.json
+  # 구 full v1.1.0 아카이브가 아니라 추출한 v1.0.5 baseline에서 staging합니다.
+  python3 scripts/stage-runtime.py --wine-source "$base_tmp/wine" --wine-dest "$WINE_ROOT" \
+    --patched-d3dmetal "$PATCHED_D3DMETAL" --build-dir "$NATIVE_BUILD" --play --fsr-translator
 
-# staging된 런타임을 core와 backend 아카이브로 분리합니다.
-sh scripts/package-wine-runtime-split.sh <wine-root> <output-dir>
+  # 최종 staging byte에 맞게 상속된 P3 metadata를 갱신합니다.
+  python3 scripts/refresh-staged-runtime-metadata.py \
+    --tree "$WINE_ROOT" --base "$base_tmp/wine" \
+    --native-manifest "$NATIVE_BUILD/build-manifest.json"
+
+  # split 패키징은 schema 4 staging을 현재 소스와 대조해 검증합니다.
+  # 보존된 구 full v1.1.0 아카이브는 schema 3이므로 패키징 입력이 아닙니다.
+  sh scripts/package-wine-runtime-split.sh "$WINE_ROOT" "$OUTPUT_DIR"
+)
 ```
 
 정확한 아카이브 hash는 상위 릴리스 노트에 기록하며 이 문서에서는 주장하지 않습니다.

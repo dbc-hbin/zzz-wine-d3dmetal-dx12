@@ -4,7 +4,13 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../../.." && pwd)
 EVIDENCE="$ROOT/docs/evidence/2026-09-23-regression-fixes/sr-cost"
 PRIOR="$ROOT/docs/evidence/2026-09-23-screenshot-analysis/performance"
 OUT=${OUT:-/tmp/yaagl-sr-cost-repro}
-WINE="$ROOT/build/release-v1.1.0/wine/bin/wine.real"
+ARCHIVE="$ROOT/build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz"
+EXTRACT_DIR=$(mktemp -d "${TMPDIR:-/tmp}/yaagl-repro-wine.XXXXXX")
+trap 'rm -rf -- "$EXTRACT_DIR"' EXIT
+trap 'exit 1' HUP INT TERM
+tar -xJf "$ARCHIVE" -C "$EXTRACT_DIR"
+WINE="$EXTRACT_DIR/wine/bin/wine.real"
+if [ ! -x "$WINE" ]; then echo "Missing archived Wine executable: $WINE" >&2; exit 2; fi
 CXX=/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++
 mkdir -p "$OUT/native" "$OUT/metalfx" "$OUT/runtime/bin" "$OUT/runtime/lib/wine/x86_64-windows"
 cp "$EVIDENCE/generated-selection-helper.sh" "$OUT/runtime/bin/yaagl-frame-probe-exec"
