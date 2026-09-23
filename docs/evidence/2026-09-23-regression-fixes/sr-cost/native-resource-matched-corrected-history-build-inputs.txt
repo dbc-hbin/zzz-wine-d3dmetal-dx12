@@ -1,0 +1,11 @@
+standalone_input_sha256: f3ac38027f3d255fbc973542e6018c3cac4f292fc3a84d9e193d37a9abbabb6c  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/native-metal4-counter-pattern-probe.mm
+matched_standalone_sha256: 6e643145e3372b5df44711eafcdaa57912950e1f37695f1749af9ab507764a3e  /tmp/yaagl-sr-native-corrected-history/native-metal4-counter-pattern-matched.mm
+instrumented_backend_sha256: 2656a9be552f5a4e1abdddbd0786e1058c63b4cdbd5d38d9126cb590cdbd701b  /tmp/yaagl-sr-native-corrected-history/instrumented/metalfx-backend.timing.mm
+layout_header_sha256: 0bad2641334f1777b023e60094ef05ef03569fee5717264632980dd3532ea295  /tmp/yaagl-lease-commit-build/fsr-kernels.inc
+c530490b57bdff53cd53c6cbfdd2ea7d7b73865f9130ba823535968bb3a1d823  /tmp/yaagl-lease-commit-build/layout.hpp
+source/transform hashes:
+e635df237771dbd9d8e869735b8a1951f0f9e0295248114af682d5a7d780369d  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/metalfx-backend.mm
+2738f662d555a766e3d4b3f251226141e45972c030000998e2363c0bec89c5ea  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/instrument-sr-timing.py
+5bdf8b4774cd2a54b72137d155ddcdcfa293a00564e7aba502cfacda150cc9b9  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/prepare-matched-native-probe.py
+1022eeb96dcb4fb5e949d56761d57ee8edc9585b976dad71d76b49cd6b74f30c  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/run-matched-native-probe.sh
+variant: FFX jitter/cap + D3D Shared usage/hazard/backing; preserve Blit-stage readback wait

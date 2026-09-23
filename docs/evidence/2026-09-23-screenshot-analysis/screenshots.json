@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-23",
+  "method": "Manual transcription of attached Metal HUD screenshots; original PNG files copied byte-for-byte and SHA-256 checked against attachment source files.",
+  "user_report": {
+    "frame_generation": "OFF",
+    "first_image": "FSR upscaling enabled with D3DMetal/MetalFX",
+    "second_image": "DXMT reference",
+    "symptoms": "Large FPS decrease with upscaling alone; higher memory use than DXMT"
+  },
+  "images": [
+    {
+      "file": "d3dmetal-metalfx-sr.png",
+      "sha256": "49025a158735a2598b81f21802afd9b38e13f42f499b10b35930c4594aca115a",
+      "pixels": [1920, 1080],
+      "hud": {
+        "device": "M5 Pro",
+        "os": "macOS 27.0",
+        "architecture": "x86_64",
+        "backend": "D3D12 (Metal 4)",
+        "presentation": "Composited",
+        "output": [1920, 1080],
+        "fps": 64.17,
+        "gpu_ms": 6.30,
+        "frame_interval_ms": 15.58,
+        "app_memory_display_GB": 13.22,
+        "metal4_memory_display_GB": 5.82,
+        "metalfx_scaling_input": [1128, 624],
+        "metalfx_scaling_target": [1920, 1080],
+        "metalfx_exposure": "Auto 0.178101",
+        "metalfx_scaling": "Temporal",
+        "game_porting_toolkit": "4.0b2",
+        "dispatch": 222,
+        "draw": 1579,
+        "clear_resource": 25,
+        "copy_resource": 219,
+        "execute_indirect": 1
+      }
+    },
+    {
+      "file": "dxmt-reference.png",
+      "sha256": "a0facb240d7e5c0ef3f90ab158fc8a1bf583ff9e102c47a001f126e0f134cca9",
+      "pixels": [1920, 1080],
+      "backend_attribution": "DXMT according to user; HUD itself says Metal",
+      "hud": {
+        "device": "M5 Pro",
+        "os": "macOS 27.0",
+        "architecture": "x86_64",
+        "backend": "Metal",
+        "presentation": "Composited",
+        "output": [1920, 1080],
+        "game_mode": "Off",
+        "fps": 91.82,
+        "gpu_ms": 6.42,
+        "frame_interval_ms": 10.89,
+        "app_memory_display_GB": 8.70,
+        "metal_memory_display_GB": 2.55
+      }
+    }
+  ],
+  "comparison_limits": [
+    "Camera, visible scene content, and potentially workload differ; these screenshots are not a controlled frame-matched A/B.",
+    "The second image does not establish its internal rendering resolution or upscaler settings.",
+    "The first image does not establish sharpening, HDR flag, backing texture sizes, frames in flight, or game settings other than the shown HUD fields.",
+    "Game Mode Off is displayed only in the second screenshot; absence of that field in the first is not proof that its Game Mode is On.",
+    "Do not add App and Metal memory values: accounting can overlap in unified memory.",
+    "Do not assume GPU timing scopes match across DXMT and D3DMetal, or subtract GPU from Frame Interval and label the result CPU time.",
+    "Dispatch and Copy Resource counters describe the shown rendering workload, not automatically FSR-only operations.",
+    "A single memory snapshot does not demonstrate a leak, allocation growth, swap, or memory pressure.",
+    "FG OFF is the user's reported operating condition; do not substitute FG ON allocation or interpolation costs as the cause."
+  ]
+}

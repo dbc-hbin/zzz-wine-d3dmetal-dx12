@@ -47,6 +47,9 @@ bool closeFloat(float a, float b, float epsilon = 0.0005f) {
 EncodeIdentity gExpectedObservationIdentity{};
 unsigned gObservationBegins = 0, gObservationEnds = 0, gObservationRejected = 0;
 bool gObservationActive = false, gRejectNextObservation = false;
+struct ObservedInputState { void* scaler; std::uint32_t width; std::uint32_t height; };
+std::array<ObservedInputState, 64> gObservedInputs{};
+std::size_t gObservedInputCount = 0;
 int gObservationToken = 0;
 
 void* observeEncodeBegin(const EncodeObservation& observation) noexcept {
@@ -67,10 +70,29 @@ void* observeEncodeBegin(const EncodeObservation& observation) noexcept {
             closeFloat(scaler.jitterOffsetX, observation.frame->jitterOffsetX.value) &&
             closeFloat(scaler.preExposure, observation.frame->preExposure.value),
             "observer begins after public scaler values have been configured");
-    require(observation.effectiveReset ==
-                (observation.frame->resetHistory.value || !observation.generationInitialized) &&
+    bool inputExtentChanged = false;
+    ObservedInputState* priorInput = nullptr;
+    for (std::size_t i = 0; i < gObservedInputCount; ++i) {
+        if (gObservedInputs[i].scaler == observation.scaler) {
+            priorInput = &gObservedInputs[i];
+            inputExtentChanged = priorInput->width != observation.frame->inputContent.width ||
+                                 priorInput->height != observation.frame->inputContent.height;
+            break;
+        }
+    }
+    const bool expectedReset = observation.frame->resetHistory.value ||
+                               !observation.generationInitialized || inputExtentChanged;
+    require(observation.effectiveReset == expectedReset &&
             static_cast<bool>(scaler.reset) == observation.effectiveReset,
-            "observer reports, rather than changes, caller/generation reset");
+            "observer reports caller, fresh-generation, and input-size reset");
+    if (priorInput) {
+        priorInput->width = observation.frame->inputContent.width;
+        priorInput->height = observation.frame->inputContent.height;
+    } else {
+        require(gObservedInputCount < gObservedInputs.size(), "observer input-state capacity");
+        gObservedInputs[gObservedInputCount++] = {observation.scaler,
+            observation.frame->inputContent.width, observation.frame->inputContent.height};
+    }
     if (gRejectNextObservation) {
         gRejectNextObservation = false;
         ++gObservationRejected;
@@ -337,6 +359,36 @@ std::vector<unsigned char> readRGBA8(id<MTLDevice> device,
     destinationBytesPerImage:bytes.size()];
     [encoder endEncoding];
     completeLegacy(command, "RGBA private readback");
+    std::memcpy(bytes.data(), staging.contents, bytes.size());
+    [staging release];
+    return bytes;
+}
+
+std::vector<unsigned char> readTextureBytes(id<MTLDevice> device,
+                                           id<MTLCommandQueue> transfer,
+                                           id<MTLTexture> texture,
+                                           NSUInteger bytesPerPixel) {
+    const NSUInteger width = texture.width;
+    const NSUInteger height = texture.height;
+    const NSUInteger rowBytes = width * bytesPerPixel;
+    std::vector<unsigned char> bytes(rowBytes * height);
+    if (texture.storageMode == MTLStorageModeShared) {
+        [texture getBytes:bytes.data() bytesPerRow:rowBytes
+               fromRegion:MTLRegionMake2D(0, 0, width, height) mipmapLevel:0];
+        return bytes;
+    }
+    id<MTLBuffer> staging =
+        [device newBufferWithLength:bytes.size() options:MTLResourceStorageModeShared];
+    require(staging != nil, "texture byte readback buffer");
+    id<MTLCommandBuffer> command = [transfer commandBuffer];
+    id<MTLBlitCommandEncoder> encoder = [command blitCommandEncoder];
+    [encoder copyFromTexture:texture sourceSlice:0 sourceLevel:0
+                sourceOrigin:MTLOriginMake(0, 0, 0)
+                  sourceSize:MTLSizeMake(width, height, 1)
+                    toBuffer:staging destinationOffset:0
+      destinationBytesPerRow:rowBytes destinationBytesPerImage:bytes.size()];
+    [encoder endEncoding];
+    completeLegacy(command, "texture byte readback");
     std::memcpy(bytes.data(), staging.contents, bytes.size());
     [staging release];
     return bytes;
@@ -683,6 +735,439 @@ std::shared_ptr<const ExecutionLease> runPrepared(CommandMode mode,
     return {};
 }
 
+struct DirectExtentReference {
+    id<MTLFXTemporalScalerBase> scaler = nil;
+    id residency = nil;
+    id<MTLTexture> color = nil;
+    id<MTLTexture> depth = nil;
+    id<MTLTexture> motion = nil;
+    id<MTLTexture> output = nil;
+    id<MTLTexture> exposure = nil;
+
+    ~DirectExtentReference() {
+        [scaler release];
+        [residency release];
+        [exposure release];
+        [output release];
+        [motion release];
+        [depth release];
+        [color release];
+    }
+};
+
+void createDirectExtentReference(DirectExtentReference& reference, id<MTLDevice> device,
+                                id compiler, CommandMode mode, NSUInteger capacity,
+                                bool lowResolutionMotion) API_AVAILABLE(macos(27.0)) {
+    const MTLTextureUsage usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite;
+    reference.color = makeTexture(device, MTLPixelFormatRGBA8Unorm, capacity, capacity,
+                                  MTLStorageModeShared, usage);
+    reference.depth = makeTexture(device, MTLPixelFormatR32Float, capacity, capacity,
+                                  MTLStorageModeShared, usage);
+    reference.motion = makeTexture(device, MTLPixelFormatRG16Float,
+                                   lowResolutionMotion ? capacity : kOutput,
+                                   lowResolutionMotion ? capacity : kOutput,
+                                   MTLStorageModeShared, usage);
+    reference.output = makeTexture(device, MTLPixelFormatRGBA8Unorm, kOutput, kOutput,
+                                   MTLStorageModePrivate,
+                                   usage | MTLTextureUsageRenderTarget);
+    reference.exposure = makeTexture(device, MTLPixelFormatR16Float, 1, 1,
+                                     MTLStorageModeShared, usage);
+    const _Float16 exposure = 1.0f;
+    [reference.exposure replaceRegion:MTLRegionMake2D(0, 0, 1, 1) mipmapLevel:0
+                            withBytes:&exposure bytesPerRow:sizeof(exposure)];
+
+    MTLFXTemporalScalerDescriptor* descriptor = [MTLFXTemporalScalerDescriptor new];
+    descriptor.inputWidth = capacity;
+    descriptor.inputHeight = capacity;
+    descriptor.outputWidth = kOutput;
+    descriptor.outputHeight = kOutput;
+    descriptor.colorTextureFormat = MTLPixelFormatRGBA8Unorm;
+    descriptor.depthTextureFormat = MTLPixelFormatR32Float;
+    descriptor.motionTextureFormat = MTLPixelFormatRG16Float;
+    descriptor.outputTextureFormat = MTLPixelFormatRGBA8Unorm;
+    descriptor.autoExposureEnabled = NO;
+    descriptor.requiresSynchronousInitialization = YES;
+    descriptor.inputContentPropertiesEnabled = YES;
+    descriptor.inputContentMinScale =
+        [MTLFXTemporalScalerDescriptor supportedInputContentMinScaleForDevice:device];
+    descriptor.inputContentMaxScale =
+        [MTLFXTemporalScalerDescriptor supportedInputContentMaxScaleForDevice:device];
+    if (@available(macOS 27.0, *)) {
+        descriptor.outputResolutionMotionVectorsEnabled = !lowResolutionMotion;
+        descriptor.jitteredMotionVectorsEnabled = YES;
+    }
+    if (mode == CommandMode::Metal4) {
+        if (@available(macOS 26.0, *))
+            reference.scaler = [descriptor newTemporalScalerWithDevice:device
+                compiler:reinterpret_cast<id<MTL4Compiler>>(compiler)];
+    } else {
+        reference.scaler = [descriptor newTemporalScalerWithDevice:device];
+    }
+    [descriptor release];
+    require(reference.scaler != nil, "direct retained-capacity MetalFX factory");
+
+    require((reference.color.usage & reference.scaler.colorTextureUsage) ==
+                reference.scaler.colorTextureUsage &&
+            (reference.depth.usage & reference.scaler.depthTextureUsage) ==
+                reference.scaler.depthTextureUsage &&
+            (reference.motion.usage & reference.scaler.motionTextureUsage) ==
+                reference.scaler.motionTextureUsage &&
+            (reference.output.usage & reference.scaler.outputTextureUsage) ==
+                reference.scaler.outputTextureUsage,
+            "direct retained-capacity textures satisfy MetalFX usage");
+    if (mode == CommandMode::Metal4) {
+        if (@available(macOS 15.0, *)) {
+            MTLResidencySetDescriptor* residencyDescriptor = [MTLResidencySetDescriptor new];
+            residencyDescriptor.initialCapacity = 5;
+            NSError* error = nil;
+            reference.residency = [device newResidencySetWithDescriptor:residencyDescriptor
+                                                                 error:&error];
+            [residencyDescriptor release];
+            require(reference.residency != nil && error == nil,
+                    "direct retained-capacity Metal4 residency set");
+            id<MTLResidencySet> set = reference.residency;
+            for (id<MTLAllocation> allocation in @[reference.color, reference.depth,
+                    reference.motion, reference.output, reference.exposure])
+                [set addAllocation:allocation];
+            [set commit];
+        }
+    }
+}
+
+template <typename T>
+std::vector<T> cpuEdgeExtend(const std::vector<T>& active, NSUInteger activeWidth,
+                             NSUInteger activeHeight, NSUInteger capacity,
+                             NSUInteger channels) {
+    require(active.size() == activeWidth * activeHeight * channels,
+            "CPU edge-reference active input size");
+    std::vector<T> padded(capacity * capacity * channels);
+    for (NSUInteger y = 0; y < capacity; ++y) {
+        const NSUInteger sourceY = std::min(y, activeHeight - 1);
+        for (NSUInteger x = 0; x < capacity; ++x) {
+            const NSUInteger sourceX = std::min(x, activeWidth - 1);
+            const std::size_t source =
+                (sourceY * activeWidth + sourceX) * channels;
+            const std::size_t destination = (y * capacity + x) * channels;
+            std::copy_n(active.begin() + static_cast<std::ptrdiff_t>(source), channels,
+                        padded.begin() + static_cast<std::ptrdiff_t>(destination));
+        }
+    }
+    return padded;
+}
+
+void fillDirectExtentReferenceInputs(DirectExtentReference& reference,
+                                     const Resources& resources,
+                                     NSUInteger activeWidth, NSUInteger activeHeight,
+                                     NSUInteger capacity, bool lowResolutionMotion)
+    API_AVAILABLE(macos(27.0)) {
+    std::vector<unsigned char> activeColor(activeWidth * activeHeight * 4);
+    [resources.color getBytes:activeColor.data() bytesPerRow:activeWidth * 4
+                   fromRegion:MTLRegionMake2D(0, 0, activeWidth, activeHeight) mipmapLevel:0];
+    const auto paddedColor = cpuEdgeExtend(activeColor, activeWidth, activeHeight,
+                                           capacity, 4);
+    [reference.color replaceRegion:MTLRegionMake2D(0, 0, capacity, capacity) mipmapLevel:0
+                         withBytes:paddedColor.data() bytesPerRow:capacity * 4];
+
+    std::vector<float> activeDepth(activeWidth * activeHeight);
+    [resources.depth getBytes:activeDepth.data() bytesPerRow:activeWidth * sizeof(float)
+                   fromRegion:MTLRegionMake2D(0, 0, activeWidth, activeHeight) mipmapLevel:0];
+    const auto paddedDepth = cpuEdgeExtend(activeDepth, activeWidth, activeHeight,
+                                           capacity, 1);
+    [reference.depth replaceRegion:MTLRegionMake2D(0, 0, capacity, capacity) mipmapLevel:0
+                         withBytes:paddedDepth.data() bytesPerRow:capacity * sizeof(float)];
+
+    if (lowResolutionMotion) {
+        std::vector<_Float16> activeMotion(activeWidth * activeHeight * 2);
+        [resources.motion getBytes:activeMotion.data()
+                      bytesPerRow:activeWidth * sizeof(_Float16) * 2
+                       fromRegion:MTLRegionMake2D(0, 0, activeWidth, activeHeight)
+                      mipmapLevel:0];
+        const auto paddedMotion = cpuEdgeExtend(activeMotion, activeWidth, activeHeight,
+                                                capacity, 2);
+        [reference.motion replaceRegion:MTLRegionMake2D(0, 0, capacity, capacity)
+                             mipmapLevel:0 withBytes:paddedMotion.data()
+                             bytesPerRow:capacity * sizeof(_Float16) * 2];
+    } else {
+        std::vector<_Float16> outputMotion(kOutput * kOutput * 2);
+        [resources.motion getBytes:outputMotion.data()
+                      bytesPerRow:kOutput * sizeof(_Float16) * 2
+                       fromRegion:MTLRegionMake2D(kOutputX, kOutputY, kOutput, kOutput)
+                      mipmapLevel:0];
+        [reference.motion replaceRegion:MTLRegionMake2D(0, 0, kOutput, kOutput)
+                             mipmapLevel:0 withBytes:outputMotion.data()
+                             bytesPerRow:kOutput * sizeof(_Float16) * 2];
+    }
+}
+
+void submitDirectExtentMetal4(Metal4Runner& runner, DirectExtentReference& reference,
+                              NSUInteger activeWidth, NSUInteger activeHeight)
+    API_AVAILABLE(macos(27.0)) {
+    id<MTL4CommandQueue> queue = reinterpret_cast<id<MTL4CommandQueue>>(runner.queue);
+    id<MTL4CommandAllocator> allocator = reinterpret_cast<id<MTL4CommandAllocator>>(runner.allocator);
+    id<MTL4CommandBuffer> command = reinterpret_cast<id<MTL4CommandBuffer>>(runner.command);
+    if (runner.used) [allocator reset];
+    runner.used = true;
+    id<MTLFence> fence = [runner.device newFence];
+    require(fence != nil, "direct retained-capacity Metal4 fence");
+    [command beginCommandBufferWithAllocator:allocator];
+    if (reference.residency)
+        [command useResidencySet:reinterpret_cast<id<MTLResidencySet>>(reference.residency)];
+    id<MTL4ComputeCommandEncoder> producer = [command computeCommandEncoder];
+    [producer updateFence:fence afterEncoderStages:MTLStageDispatch];
+    [producer endEncoding];
+
+    id<MTLFXTemporalScalerBase> scaler = reference.scaler;
+    scaler.colorTexture = reference.color;
+    scaler.depthTexture = reference.depth;
+    scaler.motionTexture = reference.motion;
+    scaler.outputTexture = reference.output;
+    scaler.exposureTexture = reference.exposure;
+    scaler.inputContentWidth = activeWidth;
+    scaler.inputContentHeight = activeHeight;
+    scaler.colorContentOffsetX = 0;
+    scaler.colorContentOffsetY = 0;
+    scaler.depthContentOffsetX = 0;
+    scaler.depthContentOffsetY = 0;
+    scaler.motionContentOffsetX = 0;
+    scaler.motionContentOffsetY = 0;
+    scaler.outputOffsetX = 0;
+    scaler.outputOffsetY = 0;
+    scaler.jitterOffsetX = 0.125f;
+    scaler.jitterOffsetY = -0.25f;
+    scaler.motionVectorScaleX = static_cast<float>(activeWidth);
+    scaler.motionVectorScaleY = static_cast<float>(activeHeight);
+    scaler.preExposure = 1.0f;
+    scaler.depthReversed = YES;
+    scaler.reset = YES;
+    scaler.fence = fence;
+    [reinterpret_cast<id<MTL4FXTemporalScaler>>(reference.scaler)
+        encodeToCommandBuffer:command];
+
+    id<MTL4ComputeCommandEncoder> consumer = [command computeCommandEncoder];
+    [consumer waitForFence:fence beforeEncoderStages:MTLStageBlit];
+    [consumer endEncoding];
+    [command endCommandBuffer];
+    dispatch_semaphore_t done = dispatch_semaphore_create(0);
+    __block NSError* gpuError = nil;
+    MTL4CommitOptions* options = [MTL4CommitOptions new];
+    [options addFeedbackHandler:^(id<MTL4CommitFeedback> feedback) {
+        gpuError = [feedback.error retain];
+        dispatch_semaphore_signal(done);
+    }];
+    id<MTL4CommandBuffer> batch[] = {command};
+    [queue commit:batch count:1 options:options];
+    require(dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC)) == 0,
+            "direct retained-capacity Metal4 feedback");
+    if (gpuError) NSLog(@"direct retained-capacity Metal4 GPU error: %@", gpuError);
+    require(gpuError == nil, "direct retained-capacity Metal4 completion");
+    [gpuError release];
+    [options release];
+    dispatch_release(done);
+    [fence release];
+}
+
+void submitDirectExtentLegacy(LegacyRunner& runner, DirectExtentReference& reference,
+                              NSUInteger activeWidth, NSUInteger activeHeight)
+    API_AVAILABLE(macos(27.0)) {
+    id<MTLCommandBuffer> command = [runner.queue commandBuffer];
+    id<MTLFence> fence = [runner.queue.device newFence];
+    require(command && fence, "direct retained-capacity legacy command/fence");
+    id<MTLBlitCommandEncoder> producer = [command blitCommandEncoder];
+    [producer updateFence:fence];
+    [producer endEncoding];
+
+    id<MTLFXTemporalScalerBase> scaler = reference.scaler;
+    scaler.colorTexture = reference.color;
+    scaler.depthTexture = reference.depth;
+    scaler.motionTexture = reference.motion;
+    scaler.outputTexture = reference.output;
+    scaler.exposureTexture = reference.exposure;
+    scaler.inputContentWidth = activeWidth;
+    scaler.inputContentHeight = activeHeight;
+    if (@available(macOS 27.0, *)) {
+        scaler.colorContentOffsetX = 0;
+        scaler.colorContentOffsetY = 0;
+        scaler.depthContentOffsetX = 0;
+        scaler.depthContentOffsetY = 0;
+        scaler.motionContentOffsetX = 0;
+        scaler.motionContentOffsetY = 0;
+        scaler.outputOffsetX = 0;
+        scaler.outputOffsetY = 0;
+    }
+    scaler.jitterOffsetX = 0.125f;
+    scaler.jitterOffsetY = -0.25f;
+    scaler.motionVectorScaleX = static_cast<float>(activeWidth);
+    scaler.motionVectorScaleY = static_cast<float>(activeHeight);
+    scaler.preExposure = 1.0f;
+    scaler.depthReversed = YES;
+    scaler.reset = YES;
+    scaler.fence = fence;
+    [reinterpret_cast<id<MTLFXTemporalScaler>>(reference.scaler)
+        encodeToCommandBuffer:command];
+    id<MTLBlitCommandEncoder> consumer = [command blitCommandEncoder];
+    [consumer waitForFence:fence];
+    [consumer endEncoding];
+    completeLegacy(command, "direct retained-capacity legacy completion");
+    [fence release];
+}
+
+struct OutputDiff {
+    std::size_t differingPixels = 0;
+    unsigned maxByteDelta = 0;
+    double meanByteDeltaLevels = 0.0;
+};
+
+OutputDiff compareOutputRect(const std::vector<unsigned char>& backing,
+                             NSUInteger backingWidth, NSUInteger originX, NSUInteger originY,
+                             const std::vector<unsigned char>& reference) {
+    require(reference.size() == kOutput * kOutput * 4,
+            "direct MetalFX comparison extent");
+    OutputDiff diff{};
+    std::uint64_t absoluteDelta = 0;
+    for (NSUInteger y = 0; y < kOutput; ++y) {
+        for (NSUInteger x = 0; x < kOutput; ++x) {
+            const std::size_t source = ((originY + y) * backingWidth + originX + x) * 4;
+            const std::size_t target = (y * kOutput + x) * 4;
+            unsigned pixelDelta = 0;
+            for (std::size_t channel = 0; channel < 4; ++channel) {
+                const unsigned delta = static_cast<unsigned>(std::abs(
+                    static_cast<int>(backing[source + channel]) -
+                    static_cast<int>(reference[target + channel])));
+                pixelDelta = std::max(pixelDelta, delta);
+                diff.maxByteDelta = std::max(diff.maxByteDelta, delta);
+                absoluteDelta += delta;
+            }
+            if (pixelDelta != 0) ++diff.differingPixels;
+        }
+    }
+    diff.meanByteDeltaLevels = static_cast<double>(absoluteDelta) /
+        static_cast<double>(kOutput * kOutput * 4);
+    return diff;
+}
+
+void fillExtentInputs(Resources& resources, NSUInteger activeWidth, NSUInteger activeHeight,
+                     bool lowResolutionMotion, unsigned poisonVariant = 0)
+    API_AVAILABLE(macos(27.0));
+
+void verifyDirectExtentParity(id<MTLDevice> device, id compiler,
+                              id<MTLCommandQueue> transfer, CommandMode mode,
+                              LegacyRunner* legacy, Metal4Runner* metal4,
+                              Resources& resources, NSUInteger capacity,
+                              NSUInteger activeWidth, NSUInteger activeHeight,
+                              bool lowResolutionMotion,
+                              const std::vector<unsigned char>& reusedBytes,
+                              const std::vector<unsigned char>& freshBytes)
+    API_AVAILABLE(macos(27.0)) {
+    DirectExtentReference retainedReference;
+    createDirectExtentReference(retainedReference, device, compiler, mode, capacity,
+                                lowResolutionMotion);
+    fillExtentInputs(resources, capacity, capacity, lowResolutionMotion, 0);
+    fillDirectExtentReferenceInputs(retainedReference, resources, capacity, capacity,
+                                    capacity, lowResolutionMotion);
+    if (mode == CommandMode::Metal4) {
+        if (@available(macOS 26.0, *))
+            submitDirectExtentMetal4(*metal4, retainedReference, capacity, capacity);
+    } else {
+        submitDirectExtentLegacy(*legacy, retainedReference, capacity, capacity);
+    }
+    fillExtentInputs(resources, activeWidth, activeHeight, lowResolutionMotion, 0);
+    fillDirectExtentReferenceInputs(retainedReference, resources, activeWidth, activeHeight,
+                                    capacity, lowResolutionMotion);
+    if (mode == CommandMode::Metal4) {
+        if (@available(macOS 26.0, *))
+            submitDirectExtentMetal4(*metal4, retainedReference, activeWidth, activeHeight);
+    } else {
+        submitDirectExtentLegacy(*legacy, retainedReference, activeWidth, activeHeight);
+    }
+    const auto retainedBytes = readRGBA8(device, transfer, retainedReference.output);
+
+    DirectExtentReference exactReference;
+    createDirectExtentReference(exactReference, device, compiler, mode, activeWidth,
+                                lowResolutionMotion);
+    fillDirectExtentReferenceInputs(exactReference, resources, activeWidth, activeHeight,
+                                   activeWidth, lowResolutionMotion);
+    if (mode == CommandMode::Metal4) {
+        if (@available(macOS 26.0, *))
+            submitDirectExtentMetal4(*metal4, exactReference, activeWidth, activeHeight);
+    } else {
+        submitDirectExtentLegacy(*legacy, exactReference, activeWidth, activeHeight);
+    }
+    const auto exactBytes = readRGBA8(device, transfer, exactReference.output);
+    const OutputDiff nativeCapacityDiff = compareOutputRect(
+        retainedBytes, kOutput, 0, 0, exactBytes);
+    const OutputDiff backendRetainedDiff = compareOutputRect(
+        reusedBytes, resources.output.width, kOutputX, kOutputY, retainedBytes);
+    const OutputDiff backendExactDiff = compareOutputRect(
+        freshBytes, resources.output.width, kOutputX, kOutputY, exactBytes);
+    std::printf("NATIVE_CAPACITY_COMPARE mode=%s motion=%s capacity=%zux%zu active=%zux%zu differing_pixels=%zu/%zu max_byte_delta=%u mean_byte_delta_levels=%.6f mean_normalized_delta=%.9f\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                lowResolutionMotion ? "low" : "display", capacity, capacity,
+                activeWidth, activeHeight, nativeCapacityDiff.differingPixels,
+                static_cast<std::size_t>(kOutput * kOutput),
+                nativeCapacityDiff.maxByteDelta, nativeCapacityDiff.meanByteDeltaLevels,
+                nativeCapacityDiff.meanByteDeltaLevels / 255.0);
+    std::printf("DIRECT_NATIVE_PARITY mode=%s motion=%s retained_pixels=%zu max_byte_delta=%u mean_byte_delta_levels=%.6f fresh_pixels=%zu fresh_max_byte_delta=%u\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                lowResolutionMotion ? "low" : "display", backendRetainedDiff.differingPixels,
+                backendRetainedDiff.maxByteDelta, backendRetainedDiff.meanByteDeltaLevels,
+                backendExactDiff.differingPixels, backendExactDiff.maxByteDelta);
+    require(backendRetainedDiff.differingPixels == 0 && backendRetainedDiff.maxByteDelta == 0,
+            "reused backend output matches direct retained-capacity MetalFX with CPU edge padding");
+    require(backendExactDiff.differingPixels == 0 && backendExactDiff.maxByteDelta == 0,
+            "fresh backend output matches direct exact-capacity MetalFX");
+    std::printf("SAME_DESCRIPTOR_NATIVE_PARITY_PASS mode=%s motion=%s retained=bit-exact fresh=bit-exact\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                lowResolutionMotion ? "low" : "display");
+}
+
+void verifyGpuEdgeStagingMatchesCpu(id<MTLDevice> device,
+                                    id<MTLCommandQueue> transfer,
+                                    id<MTLFXTemporalScalerBase> scaler,
+                                    Resources& resources, NSUInteger activeWidth,
+                                    NSUInteger activeHeight, NSUInteger capacity,
+                                    bool lowResolutionMotion) API_AVAILABLE(macos(27.0)) {
+    require(scaler.colorTexture.width == capacity && scaler.colorTexture.height == capacity &&
+            scaler.depthTexture.width == capacity && scaler.depthTexture.height == capacity,
+            "reused generation binds capacity-sized staged color and depth");
+    std::vector<unsigned char> activeColor(activeWidth * activeHeight * 4);
+    [resources.color getBytes:activeColor.data() bytesPerRow:activeWidth * 4
+                   fromRegion:MTLRegionMake2D(0, 0, activeWidth, activeHeight) mipmapLevel:0];
+    const auto expectedColor = cpuEdgeExtend(activeColor, activeWidth, activeHeight,
+                                             capacity, 4);
+    require(readRGBA8(device, transfer, scaler.colorTexture) == expectedColor,
+            "Metal color stage equals independent CPU edge extension");
+
+    std::vector<float> activeDepth(activeWidth * activeHeight);
+    [resources.depth getBytes:activeDepth.data() bytesPerRow:activeWidth * sizeof(float)
+                   fromRegion:MTLRegionMake2D(0, 0, activeWidth, activeHeight) mipmapLevel:0];
+    const auto expectedDepth = cpuEdgeExtend(activeDepth, activeWidth, activeHeight,
+                                             capacity, 1);
+    const auto actualDepth = readTextureBytes(device, transfer, scaler.depthTexture,
+                                              sizeof(float));
+    require(actualDepth.size() == expectedDepth.size() * sizeof(float) &&
+            std::memcmp(actualDepth.data(), expectedDepth.data(), actualDepth.size()) == 0,
+            "Metal depth stage equals independent CPU edge extension");
+
+    if (lowResolutionMotion) {
+        require(scaler.motionTexture.width == capacity && scaler.motionTexture.height == capacity,
+                "reused generation binds capacity-sized staged low-resolution motion");
+        std::vector<_Float16> activeMotion(activeWidth * activeHeight * 2);
+        [resources.motion getBytes:activeMotion.data()
+                      bytesPerRow:activeWidth * sizeof(_Float16) * 2
+                       fromRegion:MTLRegionMake2D(0, 0, activeWidth, activeHeight)
+                      mipmapLevel:0];
+        const auto expectedMotion = cpuEdgeExtend(activeMotion, activeWidth, activeHeight,
+                                                  capacity, 2);
+        const auto actualMotion = readTextureBytes(device, transfer, scaler.motionTexture,
+                                                   sizeof(_Float16) * 2);
+        require(actualMotion.size() == expectedMotion.size() * sizeof(_Float16) &&
+                std::memcmp(actualMotion.data(), expectedMotion.data(), actualMotion.size()) == 0,
+                "Metal low-resolution motion stage equals independent CPU edge extension");
+    }
+    std::printf("EDGE_STAGING_CPU_ORACLE_PASS color=exact depth=exact motion=%s\n",
+                lowResolutionMotion ? "exact" : "not-staged");
+}
+
 struct CaseResult {
     std::array<std::uint64_t, kSequenceFrames> hashes{};
 };
@@ -976,6 +1461,503 @@ void testFsrOperationsMetal4(id<MTLDevice> device, id<MTL4Compiler> compiler,
     std::puts("FSR_OPERATIONS_PASS transfer=srgb+pq mask=max rcas=off+on exposure=preserved");
 }
 
+
+std::pair<NSUInteger, NSUInteger> findExtentPair(id<MTLDevice> device) API_AVAILABLE(macos(27.0)) {
+    const float minScale = [MTLFXTemporalScalerDescriptor
+        supportedInputContentMinScaleForDevice:device];
+    const float maxScale = [MTLFXTemporalScalerDescriptor
+        supportedInputContentMaxScaleForDevice:device];
+    for (NSUInteger larger = kOutput - 1; larger > 16; --larger) {
+        const float largerScale = static_cast<float>(kOutput) / static_cast<float>(larger);
+        if (largerScale < minScale || largerScale > maxScale) continue;
+        for (NSUInteger smaller = 17; smaller < larger; ++smaller) {
+            const float smallerScale = static_cast<float>(kOutput) / static_cast<float>(smaller);
+            if (smallerScale >= minScale && smallerScale <= maxScale)
+                return {larger, smaller};
+        }
+    }
+    require(false, "device supports two legal distinct input extents");
+    return {};
+}
+
+FrameInfo makeExtentFrame(Resources& resources, NSUInteger width, NSUInteger height,
+                          bool lowResolutionMotion) {
+    FrameInfo frame{};
+    frame.color = reinterpret_cast<void*>(resources.color);
+    frame.depth = reinterpret_cast<void*>(resources.depth);
+    frame.motionVectors = reinterpret_cast<void*>(resources.motion);
+    frame.output = reinterpret_cast<void*>(resources.output);
+    frame.exposureTexture = {reinterpret_cast<void*>(resources.exposure), true};
+    frame.inputContent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+    frame.colorRect = {0, 0, static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)};
+    frame.depthRect = frame.colorRect;
+    frame.reactiveRect = frame.colorRect;
+    frame.motionRect = lowResolutionMotion
+        ? frame.colorRect
+        : yaagl::pso::metalfx::Rect{static_cast<std::uint32_t>(kOutputX),
+                                    static_cast<std::uint32_t>(kOutputY),
+                                    static_cast<std::uint32_t>(kOutput),
+                                    static_cast<std::uint32_t>(kOutput)};
+    frame.outputRect = {static_cast<std::uint32_t>(kOutputX), static_cast<std::uint32_t>(kOutputY),
+                        static_cast<std::uint32_t>(kOutput), static_cast<std::uint32_t>(kOutput)};
+    frame.jitterOffsetX = {0.125f, true};
+    frame.jitterOffsetY = {-0.25f, true};
+    frame.motionVectorScaleX = {static_cast<float>(width), true};
+    frame.motionVectorScaleY = {static_cast<float>(height), true};
+    frame.preExposure = {1.0f, true};
+    frame.resetHistory = {false, true};
+    frame.exposureMode = ExposureMode::Texture;
+    return frame;
+}
+
+void fillExtentInputs(Resources& resources, NSUInteger activeWidth, NSUInteger activeHeight,
+                     bool lowResolutionMotion, unsigned poisonVariant) {
+    const bool alternatePoison = (poisonVariant & 1u) != 0;
+    const unsigned char poisonRed = alternatePoison ? 0 : 255;
+    const unsigned char poisonGreen = alternatePoison ? 255 : 0;
+    const unsigned char poisonBlue = alternatePoison ? 0 : 255;
+    const float poisonDepth = alternatePoison ? 0.03f : 0.97f;
+    const float poisonMotion = alternatePoison ? -16.0f : 16.0f;
+    const NSUInteger backing = resources.capacity;
+    std::vector<unsigned char> color(backing * backing * 4);
+    std::vector<float> depth(backing * backing, poisonDepth);
+    for (NSUInteger y = 0; y < backing; ++y) {
+        for (NSUInteger x = 0; x < backing; ++x) {
+            const std::size_t offset = (y * backing + x) * 4;
+            if (x < activeWidth && y < activeHeight) {
+                color[offset + 0] = static_cast<unsigned char>(32 + (x * 13 + y * 3) % 192);
+                color[offset + 1] = static_cast<unsigned char>(24 + (x * 5 + y * 11) % 208);
+                color[offset + 2] = static_cast<unsigned char>(40 + (x * 7 + y * 17) % 184);
+                color[offset + 3] = 255;
+                const float denominator = static_cast<float>(std::max<NSUInteger>(
+                    1, activeWidth + activeHeight - 2));
+                depth[y * backing + x] = 0.15f + 0.7f * static_cast<float>(x + y) / denominator;
+            } else {
+                color[offset + 0] = poisonRed;
+                color[offset + 1] = poisonGreen;
+                color[offset + 2] = poisonBlue;
+                color[offset + 3] = 255;
+            }
+        }
+    }
+    [resources.color replaceRegion:MTLRegionMake2D(0, 0, backing, backing) mipmapLevel:0
+                         withBytes:color.data() bytesPerRow:backing * 4];
+    [resources.depth replaceRegion:MTLRegionMake2D(0, 0, backing, backing) mipmapLevel:0
+                         withBytes:depth.data() bytesPerRow:backing * sizeof(float)];
+
+    const NSUInteger motionWidth = resources.motion.width;
+    const NSUInteger motionHeight = resources.motion.height;
+    std::vector<_Float16> motion(motionWidth * motionHeight * 2);
+    const NSUInteger motionX = lowResolutionMotion ? 0 : kOutputX;
+    const NSUInteger motionY = lowResolutionMotion ? 0 : kOutputY;
+    const NSUInteger activeMotionWidth = lowResolutionMotion ? activeWidth : kOutput;
+    const NSUInteger activeMotionHeight = lowResolutionMotion ? activeHeight : kOutput;
+    for (NSUInteger y = 0; y < motionHeight; ++y) {
+        for (NSUInteger x = 0; x < motionWidth; ++x) {
+            const bool active = x >= motionX && x < motionX + activeMotionWidth &&
+                                y >= motionY && y < motionY + activeMotionHeight;
+            const float vx = active ? 0.002f * (static_cast<float>(x % 9) - 4.0f)
+                                    : poisonMotion;
+            const float vy = active ? 0.002f * (static_cast<float>(y % 11) - 5.0f)
+                                    : -poisonMotion;
+            const std::size_t offset = (y * motionWidth + x) * 2;
+            motion[offset + 0] = _Float16(vx);
+            motion[offset + 1] = _Float16(vy);
+        }
+    }
+    [resources.motion replaceRegion:MTLRegionMake2D(0, 0, motionWidth, motionHeight)
+                         mipmapLevel:0 withBytes:motion.data()
+                         bytesPerRow:motionWidth * sizeof(_Float16) * 2];
+    const float exposure = 1.0f;
+    [resources.exposure replaceRegion:MTLRegionMake2D(0, 0, 1, 1) mipmapLevel:0
+                           withBytes:&exposure bytesPerRow:sizeof(exposure)];
+}
+
+std::shared_ptr<const ExecutionLease> encodeExtentFrame(
+    id<MTLDevice> device, id<MTLCommandQueue> transfer, Feature& feature,
+    Resources& resources, const FrameInfo& frame, const FrameOperations& operations,
+    CommandMode mode, LegacyRunner* legacy, Metal4Runner* metal4,
+    bool verifyFullOutput = true, TemporalOutputInfo* outputInfo = nullptr,
+    id<MTLFXTemporalScalerBase>* observeScaler = nullptr) {
+    writeRGBA8(device, transfer, resources.output, sentinelBytes());
+    Error error;
+    auto prepared = feature.prepare(frame, makeTextureSet(resources), &error, operations);
+    require(prepared != nullptr,
+            error.message.empty() ? "dynamic-extent preparation" : error.message.c_str());
+    if (outputInfo) *outputInfo = prepared->temporalOutputInfo();
+    if (observeScaler) {
+        const std::size_t captures = captureCount();
+        require(captures != 0, "first dynamic-extent scaler capture");
+        *observeScaler = reinterpret_cast<id<MTLFXTemporalScalerBase>>(
+            captureAt(captures - 1).scaler);
+        installScalerObservers(*observeScaler);
+    }
+    auto lease = runPrepared(mode, legacy, metal4, prepared, &error);
+    require(lease != nullptr,
+            error.message.empty() ? "dynamic-extent encode" : error.message.c_str());
+    if (verifyFullOutput)
+        verifyOutputSentinel(readRGBA8(device, transfer, resources.output),
+                             resources.output.width, resources.output.height);
+    return lease;
+}
+
+void testInputExtentReuse(id<MTLDevice> device, id compiler,
+                          id<MTLCommandQueue> transfer, CommandMode mode,
+                          bool lowResolutionMotion,
+                          bool transferColor = false) API_AVAILABLE(macos(27.0)) {
+    const auto [larger, smaller] = findExtentPair(device);
+    CreateInfo create = makeCreateInfo();
+    create.input = {static_cast<std::uint32_t>(larger), static_cast<std::uint32_t>(larger)};
+    FrameOperations operations{};
+    if (transferColor) operations.colorTransfer = ColorTransfer::SRGB;
+    if (!lowResolutionMotion)
+        create.featureFlags.value &= ~static_cast<std::uint32_t>(FeatureFlagMVLowRes);
+    CreateContext context{reinterpret_cast<void*>(device),
+                          mode == CommandMode::Metal4 ? reinterpret_cast<void*>(compiler) : nullptr,
+                          mode};
+    Error error;
+    auto feature = Feature::create(context, create, &error);
+    require(feature != nullptr, error.message.empty() ? "extent-reuse feature" : error.message.c_str());
+    Resources resources = makeResources(device, larger, MTLStorageModeShared);
+    if (!lowResolutionMotion) {
+        [resources.motion release];
+        resources.motion = makeTexture(device, MTLPixelFormatRG16Float,
+                                       kOutputBacking, kOutputBacking,
+                                       MTLStorageModeShared, MTLTextureUsageShaderRead);
+    }
+    std::unique_ptr<LegacyRunner> legacy;
+    std::unique_ptr<Metal4Runner> metal4;
+    if (mode == CommandMode::Legacy) legacy = std::make_unique<LegacyRunner>(device);
+    else if (@available(macOS 26.0, *)) metal4 = std::make_unique<Metal4Runner>(device);
+
+    const std::size_t captureBase = captureCount();
+    fillExtentInputs(resources, larger, larger, lowResolutionMotion);
+    const FrameInfo largeFrame = makeExtentFrame(resources, larger, larger, lowResolutionMotion);
+    id<MTLFXTemporalScalerBase> scaler = nil;
+    auto largeLease = encodeExtentFrame(device, transfer, *feature, resources, largeFrame,
+                                        operations, mode, legacy.get(), metal4.get(), true,
+                                        nullptr, &scaler);
+    require(largeLease->effectiveReset() && !largeLease->generationInitialized(),
+            "initial capacity frame resets its fresh generation");
+    require(captureCount() == captureBase + 1, "initial extent creates one scaler");
+    FactoryCapture largeCapture = captureAt(captureBase);
+    require(largeCapture.inputWidth == larger && largeCapture.inputHeight == larger &&
+            largeCapture.outputWidth == kOutput && largeCapture.outputHeight == kOutput,
+            "first descriptor uses the observed active extent, not feature maximum");
+    require(scaler == reinterpret_cast<id<MTLFXTemporalScalerBase>>(largeCapture.scaler),
+            "pre-encode reset observer follows the captured scaler");
+    bool resetValue = false;
+    require(observedBool(scaler, &gObservedResetKey, resetValue) && resetValue,
+            "initial fresh generation reset reaches MetalFX");
+    largeLease.reset();
+
+    fillExtentInputs(resources, smaller, smaller, lowResolutionMotion);
+    const FrameInfo smallFrame = makeExtentFrame(resources, smaller, smaller, lowResolutionMotion);
+    auto smallLease = encodeExtentFrame(device, transfer, *feature, resources, smallFrame,
+                                        operations, mode, legacy.get(), metal4.get());
+    require(captureCount() == captureBase + 1 &&
+            smallLease->scaler() == reinterpret_cast<void*>(scaler),
+            "smaller active extent reuses descriptor-capacity scaler");
+    require(smallLease->effectiveReset() && smallLease->generationInitialized(),
+            "changing active extent resets reused temporal history");
+    require(observedBool(scaler, &gObservedResetKey, resetValue) && resetValue,
+            "input-size reset reaches MetalFX");
+    if (@available(macOS 27.0, *)) {
+        require(largeCapture.outputMotion == !lowResolutionMotion,
+                "descriptor preserves low/display-resolution motion mode");
+    }
+    require(scaler.motionTexture.width == (lowResolutionMotion ? larger : kOutput) &&
+            scaler.motionTexture.height == (lowResolutionMotion ? larger : kOutput),
+            "bound motion texture matches its descriptor capacity");
+    const std::vector<unsigned char> reusedSmallBytes =
+        readRGBA8(device, transfer, resources.output);
+    if (!transferColor)
+        verifyGpuEdgeStagingMatchesCpu(device, transfer, scaler, resources,
+                                       smaller, smaller, larger, lowResolutionMotion);
+    smallLease.reset();
+
+    fillExtentInputs(resources, smaller, smaller, lowResolutionMotion, 1);
+    FrameInfo alternatePoisonFrame =
+        makeExtentFrame(resources, smaller, smaller, lowResolutionMotion);
+    alternatePoisonFrame.resetHistory = {true, true};
+    auto alternatePoisonLease = encodeExtentFrame(
+        device, transfer, *feature, resources, alternatePoisonFrame,
+        operations, mode, legacy.get(), metal4.get());
+    require(alternatePoisonLease->effectiveReset() &&
+            alternatePoisonLease->scaler() == reinterpret_cast<void*>(scaler),
+            "poison-swap frame resets the same retained-capacity scaler");
+    const std::vector<unsigned char> alternatePoisonBytes =
+        readRGBA8(device, transfer, resources.output);
+    std::size_t poisonDifferentPixels = 0;
+    unsigned poisonMaxDelta = 0;
+    std::uint64_t poisonAbsoluteDelta = 0;
+    for (NSUInteger y = kOutputY; y < kOutputY + kOutput; ++y) {
+        for (NSUInteger x = kOutputX; x < kOutputX + kOutput; ++x) {
+            const std::size_t offset = (y * resources.output.width + x) * 4;
+            unsigned pixelDelta = 0;
+            for (std::size_t channel = 0; channel < 4; ++channel) {
+                const unsigned delta = static_cast<unsigned>(std::abs(
+                    static_cast<int>(alternatePoisonBytes[offset + channel]) -
+                    static_cast<int>(reusedSmallBytes[offset + channel])));
+                pixelDelta = std::max(pixelDelta, delta);
+                poisonMaxDelta = std::max(poisonMaxDelta, delta);
+                poisonAbsoluteDelta += delta;
+            }
+            if (pixelDelta != 0) ++poisonDifferentPixels;
+        }
+    }
+    const double meanPoisonDelta = static_cast<double>(poisonAbsoluteDelta) /
+        static_cast<double>(kOutput * kOutput * 4);
+    std::printf("EXTENT_POISON_COMPARE mode=%s motion=%s color_transfer=%s differing_pixels=%zu/%zu max_byte_delta=%u mean_byte_delta_levels=%.6f mean_normalized_delta=%.9f\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                lowResolutionMotion ? "low" : "display",
+                transferColor ? "sRGB" : "none", poisonDifferentPixels,
+                static_cast<std::size_t>(kOutput * kOutput), poisonMaxDelta,
+                meanPoisonDelta, meanPoisonDelta / 255.0);
+    require(alternatePoisonBytes == reusedSmallBytes,
+            "changing only poisoned inactive padding leaves reset output bit-identical");
+    std::puts("EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact");
+    alternatePoisonLease.reset();
+
+    CreateInfo freshCreate = create;
+    freshCreate.input = {static_cast<std::uint32_t>(smaller),
+                         static_cast<std::uint32_t>(smaller)};
+    auto freshFeature = Feature::create(context, freshCreate, &error);
+    require(freshFeature != nullptr,
+            error.message.empty() ? "fresh exact-small feature" : error.message.c_str());
+    Resources freshResources = makeResources(device, larger, MTLStorageModeShared);
+    if (!lowResolutionMotion) {
+        [freshResources.motion release];
+        freshResources.motion = makeTexture(device, MTLPixelFormatRG16Float,
+                                            kOutputBacking, kOutputBacking,
+                                            MTLStorageModeShared, MTLTextureUsageShaderRead);
+    }
+    fillExtentInputs(freshResources, smaller, smaller, lowResolutionMotion);
+    const std::size_t freshCaptureIndex = captureCount();
+    auto freshSmallLease = encodeExtentFrame(
+        device, transfer, *freshFeature, freshResources,
+        makeExtentFrame(freshResources, smaller, smaller, lowResolutionMotion),
+        operations, mode, legacy.get(), metal4.get());
+    require(freshSmallLease->effectiveReset() && !freshSmallLease->generationInitialized(),
+            "fresh exact-small reference begins with reset history");
+    require(captureCount() == freshCaptureIndex + 1 &&
+            captureAt(freshCaptureIndex).inputWidth == smaller &&
+            captureAt(freshCaptureIndex).inputHeight == smaller,
+            "fresh reference descriptor uses exact smaller capacity");
+    id<MTLFXTemporalScalerBase> freshScaler =
+        reinterpret_cast<id<MTLFXTemporalScalerBase>>(captureAt(freshCaptureIndex).scaler);
+    installScalerObservers(freshScaler);
+    require(observedBool(freshScaler, &gObservedResetKey, resetValue) && resetValue,
+            "fresh exact-small reset reaches MetalFX");
+    const std::vector<unsigned char> freshSmallBytes =
+        readRGBA8(device, transfer, freshResources.output);
+    std::size_t differingPixels = 0;
+    unsigned maximumDifference = 0;
+    std::uint64_t absoluteDifference = 0;
+    for (NSUInteger y = kOutputY; y < kOutputY + kOutput; ++y) {
+        for (NSUInteger x = kOutputX; x < kOutputX + kOutput; ++x) {
+            const std::size_t offset = (y * resources.output.width + x) * 4;
+            unsigned pixelDifference = 0;
+            for (std::size_t channel = 0; channel < 4; ++channel) {
+                const unsigned difference = static_cast<unsigned>(std::abs(
+                    static_cast<int>(reusedSmallBytes[offset + channel]) -
+                    static_cast<int>(freshSmallBytes[offset + channel])));
+                pixelDifference = std::max(pixelDifference, difference);
+                maximumDifference = std::max(maximumDifference, difference);
+                absoluteDifference += difference;
+            }
+            if (pixelDifference != 0) ++differingPixels;
+        }
+    }
+    const double meanChannelDifference = static_cast<double>(absoluteDifference) /
+        static_cast<double>(kOutput * kOutput * 4);
+    std::printf("EXTENT_FRESH_CAPACITY_MEASUREMENT mode=%s motion=%s color_transfer=%s differing_pixels=%zu/%zu max_byte_delta=%u mean_byte_delta_levels=%.6f mean_normalized_delta=%.9f hashes=%016llx/%016llx color_direct=%d motion=%zux%zu acceptance=measurement_only\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                lowResolutionMotion ? "low" : "display",
+                transferColor ? "sRGB" : "none", differingPixels,
+                static_cast<std::size_t>(kOutput * kOutput), maximumDifference,
+                meanChannelDifference, meanChannelDifference / 255.0,
+                static_cast<unsigned long long>(hashBytes(reusedSmallBytes)),
+                static_cast<unsigned long long>(hashBytes(freshSmallBytes)),
+                scaler.colorTexture == resources.color,
+                scaler.motionTexture.width, scaler.motionTexture.height);
+    freshSmallLease.reset();
+
+    fillExtentInputs(resources, smaller, smaller, lowResolutionMotion);
+    auto stableSmallLease = encodeExtentFrame(
+        device, transfer, *feature, resources,
+        makeExtentFrame(resources, smaller, smaller, lowResolutionMotion),
+        operations, mode, legacy.get(), metal4.get());
+    require(!stableSmallLease->effectiveReset() && stableSmallLease->generationInitialized(),
+            "stable active extent preserves temporal history");
+    require(captureCount() == freshCaptureIndex + 1,
+            "stable smaller extent does not create another scaler");
+    stableSmallLease.reset();
+
+    fillExtentInputs(resources, larger, larger, lowResolutionMotion);
+    auto returnedLargeLease = encodeExtentFrame(
+        device, transfer, *feature, resources,
+        makeExtentFrame(resources, larger, larger, lowResolutionMotion),
+        operations, mode, legacy.get(), metal4.get());
+    require(returnedLargeLease->effectiveReset() && returnedLargeLease->generationInitialized(),
+            "returning to a prior extent resets reused temporal history");
+    require(captureCount() == freshCaptureIndex + 1 &&
+            returnedLargeLease->scaler() == reinterpret_cast<void*>(scaler),
+            "large-small-large sequence retains one scaler generation");
+    require(observedBool(scaler, &gObservedResetKey, resetValue) && resetValue,
+            "return-to-large history reset reaches MetalFX");
+    returnedLargeLease.reset();
+
+    if (!transferColor) {
+        fillExtentInputs(resources, smaller, smaller, lowResolutionMotion);
+        verifyDirectExtentParity(device, compiler, transfer, mode, legacy.get(), metal4.get(),
+                                 resources, larger, smaller, smaller, lowResolutionMotion,
+                                 reusedSmallBytes, freshSmallBytes);
+    }
+
+    std::printf("INPUT_EXTENT_REUSE_PASS mode=%s motion=%s color_transfer=%s extents=%zux%zu->%zux%zu backend_captures=2 padding=poisoned\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                lowResolutionMotion ? "low" : "display",
+                transferColor ? "sRGB" : "none", larger, larger, smaller, smaller);
+}
+
+void testInputCapacityGrowthAndScaleFallback(id<MTLDevice> device, id compiler,
+                                             id<MTLCommandQueue> transfer,
+                                             CommandMode mode) API_AVAILABLE(macos(27.0)) {
+    const float minScale = [MTLFXTemporalScalerDescriptor
+        supportedInputContentMinScaleForDevice:device];
+    const float maxScale = [MTLFXTemporalScalerDescriptor
+        supportedInputContentMaxScaleForDevice:device];
+    NSUInteger large = static_cast<NSUInteger>(std::floor(
+        static_cast<double>(kOutput) / static_cast<double>(minScale)));
+    while (large > 16) {
+        const float scale = static_cast<float>(kOutput) / static_cast<float>(large);
+        if (scale >= minScale && scale <= maxScale) break;
+        --large;
+    }
+    require(large > 16, "device supports a large legal input capacity");
+    NSUInteger smaller = 0;
+    for (NSUInteger candidate = large - 1; candidate > 16; --candidate) {
+        const float scale = static_cast<float>(kOutput) / static_cast<float>(candidate);
+        if (scale >= minScale && scale <= maxScale) {
+            smaller = candidate;
+            break;
+        }
+    }
+    require(smaller > 16, "device supports mixed-axis legal input extents");
+    NSUInteger cappedInput = 0;
+    NSUInteger cappedOutput = 0;
+    for (NSUInteger candidate = 16; candidate < large; ++candidate) {
+        const double callerScale = static_cast<double>(kOutput) / candidate;
+        if (callerScale <= maxScale) continue;
+        const NSUInteger temporal = static_cast<NSUInteger>(std::floor(
+            static_cast<double>(candidate) * static_cast<double>(maxScale)));
+        const float actualScale = static_cast<float>(temporal) / static_cast<float>(candidate);
+        const float highWaterScale = static_cast<float>(temporal) / static_cast<float>(large);
+        if (temporal != 0 && actualScale >= minScale && actualScale <= maxScale &&
+            highWaterScale < minScale) {
+            cappedInput = candidate;
+            cappedOutput = temporal;
+            break;
+        }
+    }
+    require(cappedInput != 0, "device scale range permits exact-cap high-water fallback");
+
+    CreateInfo create = makeCreateInfo();
+    create.input = {static_cast<std::uint32_t>(large), static_cast<std::uint32_t>(large)};
+    Error error;
+    CreateContext context{reinterpret_cast<void*>(device),
+                          mode == CommandMode::Metal4 ? reinterpret_cast<void*>(compiler) : nullptr,
+                          mode};
+    auto feature = Feature::create(context, create, &error);
+    require(feature != nullptr,
+            error.message.empty() ? "capacity-growth feature" : error.message.c_str());
+    Resources resources = makeResources(device, large, MTLStorageModeShared);
+    std::unique_ptr<LegacyRunner> legacy;
+    std::unique_ptr<Metal4Runner> metal4;
+    if (mode == CommandMode::Legacy) legacy = std::make_unique<LegacyRunner>(device);
+    else if (@available(macOS 26.0, *)) metal4 = std::make_unique<Metal4Runner>(device);
+
+    FrameOperations operations{};
+    operations.capOutputToTemporalMaxScale = true;
+    const std::size_t captureBase = captureCount();
+    fillExtentInputs(resources, large, smaller, true);
+    auto firstLease = encodeExtentFrame(
+        device, transfer, *feature, resources,
+        makeExtentFrame(resources, large, smaller, true), operations,
+        mode, legacy.get(), metal4.get());
+    require(captureCount() == captureBase + 1 &&
+            captureAt(captureBase).inputWidth == large &&
+            captureAt(captureBase).inputHeight == smaller,
+            "first generation uses observed mixed input capacity, not create maximum");
+    id<MTLFXTemporalScalerBase> firstScaler =
+        reinterpret_cast<id<MTLFXTemporalScalerBase>>(captureAt(captureBase).scaler);
+    installScalerObservers(firstScaler);
+    firstLease.reset();
+
+    fillExtentInputs(resources, smaller, large, true);
+    auto grownLease = encodeExtentFrame(
+        device, transfer, *feature, resources,
+        makeExtentFrame(resources, smaller, large, true), operations,
+        mode, legacy.get(), metal4.get());
+    require(captureCount() == captureBase + 2 &&
+            captureAt(captureBase + 1).inputWidth == large &&
+            captureAt(captureBase + 1).inputHeight == large,
+            "componentwise capacity growth creates one square high-water generation");
+    require(grownLease->effectiveReset() && !grownLease->generationInitialized(),
+            "capacity growth starts clean temporal history");
+    id<MTLFXTemporalScalerBase> grownScaler =
+        reinterpret_cast<id<MTLFXTemporalScalerBase>>(captureAt(captureBase + 1).scaler);
+    installScalerObservers(grownScaler);
+    grownLease.reset();
+
+    fillExtentInputs(resources, cappedInput, cappedInput, true);
+    TemporalOutputInfo outputInfo;
+    auto fallbackLease = encodeExtentFrame(
+        device, transfer, *feature, resources,
+        makeExtentFrame(resources, cappedInput, cappedInput, true), operations,
+        mode, legacy.get(), metal4.get(), false, &outputInfo);
+    require(captureCount() == captureBase + 3,
+            "output-cap change recreates scaler with a scale-compatible input capacity");
+    const FactoryCapture fallbackCapture = captureAt(captureBase + 2);
+    require(fallbackCapture.inputWidth == cappedInput &&
+            fallbackCapture.inputHeight == cappedInput &&
+            fallbackCapture.outputWidth == cappedOutput &&
+            fallbackCapture.outputHeight == cappedOutput,
+            "scale-incompatible mixed high-water falls back to exact active extent");
+    require(fallbackLease->effectiveReset() && !fallbackLease->generationInitialized(),
+            "exact-cap fallback starts clean temporal history");
+    require(outputInfo.width == cappedOutput && outputInfo.height == cappedOutput &&
+            outputInfo.placementX == (kOutput - cappedOutput) / 2 &&
+            outputInfo.placementY == (kOutput - cappedOutput) / 2,
+            "exact-cap fallback retains centered temporal output placement");
+    id<MTLFXTemporalScalerBase> fallbackScaler =
+        reinterpret_cast<id<MTLFXTemporalScalerBase>>(fallbackCapture.scaler);
+    installScalerObservers(fallbackScaler);
+    bool resetValue = false;
+    require(observedBool(fallbackScaler, &gObservedResetKey, resetValue) && resetValue,
+            "exact-cap fallback reset reaches MetalFX");
+    const auto outputBytes = readRGBA8(device, transfer, resources.output);
+    std::size_t changedInside = 0;
+    for (NSUInteger y = 0; y < resources.output.height; ++y) {
+        for (NSUInteger x = 0; x < resources.output.width; ++x) {
+            const bool inside = x >= kOutputX && x < kOutputX + kOutput &&
+                                y >= kOutputY && y < kOutputY + kOutput;
+            const std::size_t offset = (y * resources.output.width + x) * 4;
+            const bool sentinel = outputBytes[offset] == kSentinel[0] &&
+                outputBytes[offset + 1] == kSentinel[1] &&
+                outputBytes[offset + 2] == kSentinel[2] &&
+                outputBytes[offset + 3] == kSentinel[3];
+            if (!inside) require(sentinel, "scale-fallback leaves output outside subrect sentinel");
+            if (inside && !sentinel) ++changedInside;
+        }
+    }
+    require(changedInside > 0, "scale-fallback updates requested output subrect");
+    fallbackLease.reset();
+    std::printf("INPUT_CAPACITY_GROWTH_FALLBACK_PASS mode=%s mixed=%zux%zu->%zux%zu capped=%zux%zu output=%zux%zu\n",
+                mode == CommandMode::Metal4 ? "metal4" : "legacy",
+                large, smaller, smaller, large, cappedInput, cappedInput, cappedOutput, cappedOutput);
+}
 
 void testDisplayResolutionMotionMetal4(id<MTLDevice> device, id<MTL4Compiler> compiler,
                                        id<MTLCommandQueue> transfer) API_AVAILABLE(macos(26.0)) {
@@ -1345,12 +2327,51 @@ void releaseCaptures() {
         capture.scaler = nil;
     }
     gCaptures.clear();
+    gObservedInputCount = 0;
 }
 
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     @autoreleasepool {
+        // Narrow reruns cover input-extent staging without repeating unrelated cases.
+        if (argc == 2 && std::strcmp(argv[1], "--edge-reuse-only") == 0) {
+            if (@available(macOS 27.0, *)) {
+                id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+                require(device != nil && [MTLFXTemporalScalerDescriptor supportsDevice:device],
+                        "MetalFX temporal device for scoped edge-reuse cases");
+                installFactoryCapture();
+                id<MTLCommandQueue> transfer = [device newCommandQueue];
+                require(transfer != nil, "scoped edge-reuse transfer queue");
+                testInputExtentReuse(device, nil, transfer, CommandMode::Legacy, true);
+                if (@available(macOS 26.0, *)) {
+                    require([MTLFXTemporalScalerDescriptor supportsMetal4FX:device],
+                            "Metal4FX supported for scoped edge-reuse cases");
+                    NSError* compilerError = nil;
+                    MTL4CompilerDescriptor* descriptor = [MTL4CompilerDescriptor new];
+                    id<MTL4Compiler> compiler =
+                        [device newCompilerWithDescriptor:descriptor error:&compilerError];
+                    [descriptor release];
+                    if (compilerError) NSLog(@"Metal4 compiler error: %@", compilerError);
+                    require(compiler != nil, "scoped edge-reuse Metal4 compiler");
+                    testInputExtentReuse(device, compiler, transfer, CommandMode::Metal4, true);
+                    testInputExtentReuse(device, compiler, transfer, CommandMode::Metal4, false);
+                    testInputExtentReuse(device, compiler, transfer, CommandMode::Metal4,
+                                         true, true);
+                    [compiler release];
+                } else {
+                    require(false, "Metal4FX scoped edge-reuse requires macOS 26 or newer");
+                }
+                releaseCaptures();
+                [transfer release];
+                [device release];
+                std::puts("METALFX_EDGE_REUSE_ONLY_PASS");
+                return 0;
+            }
+            require(false, "scoped edge-reuse cases require macOS 27 or newer");
+            return 1;
+        }
+        require(argc == 1, "unknown MetalFX backend test argument");
         if (@available(macOS 27.0, *)) {
         } else {
             require(false, "SDK27 runtime required for full offset contract test");
@@ -1377,6 +2398,9 @@ int main() {
             require(legacyPrepared && legacyError.code == ErrorCode::None,
                     "Apple10 legacy factory uses the system-default scaler");
             std::puts("LEGACY_SYSTEM_DEFAULT");
+            // Apple10 normally skips Legacy encoding coverage; exercise its extent-reuse path.
+            if (@available(macOS 27.0, *))
+                testInputExtentReuse(device, nil, transfer, CommandMode::Legacy, true);
         } else {
             installEncodeObserver(&gTestEncodeObserver);
             gRejectNextObservation = true;
@@ -1392,6 +2416,11 @@ int main() {
             require(gObservationBegins == afterLegacyObserved, "disabled legacy observer is not invoked");
             require(legacyShared.hashes == legacyPrivate.hashes,
                     "legacy observed Shared and unobserved Private outputs are pixel-identical");
+            if (@available(macOS 27.0, *)) {
+                testInputExtentReuse(device, nil, transfer, CommandMode::Legacy, true);
+                testInputExtentReuse(device, nil, transfer, CommandMode::Legacy, false);
+                testInputCapacityGrowthAndScaleFallback(device, nil, transfer, CommandMode::Legacy);
+            }
         }
 
         if (@available(macOS 26.0, *)) {
@@ -1419,6 +2448,13 @@ int main() {
                         "Metal4 observed Shared and unobserved Private outputs are pixel-identical");
                 testFsrOperationsMetal4(device, compiler, transfer);
                 testDisplayResolutionMotionMetal4(device, compiler, transfer);
+                if (@available(macOS 27.0, *)) {
+                    testInputExtentReuse(device, compiler, transfer, CommandMode::Metal4, true);
+                    testInputExtentReuse(device, compiler, transfer, CommandMode::Metal4, false);
+                    testInputExtentReuse(device, compiler, transfer, CommandMode::Metal4, true, true);
+                    testInputCapacityGrowthAndScaleFallback(device, compiler, transfer,
+                                                            CommandMode::Metal4);
+                }
                 releaseCaptures();
                 testExactScaleCapGpu(device, transfer);
                 testFeatureReleaseBeforeSubmitMetal4(device, compiler, transfer);
@@ -1430,7 +2466,8 @@ int main() {
         }
 
         std::printf("METALFX_BACKEND_NATIVE_PASS captures=%zu full_offsets=1 exposure_numeric=1 "
-                    "history=1 resize_generation=1 replay_leases=1 stale_failure=1 encode_observer=1\n",
+                    "history=1 resize_generation=1 input_extent_reuse=1 capacity_growth=1 "
+                    "scale_fallback=1 replay_leases=1 stale_failure=1 encode_observer=1\n",
                     captureCount());
         releaseCaptures();
         [transfer release];

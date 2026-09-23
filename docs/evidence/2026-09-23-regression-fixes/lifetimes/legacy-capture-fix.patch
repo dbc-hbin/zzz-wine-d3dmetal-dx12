@@ -1,0 +1,15 @@
+--- docs/evidence/2026-09-23-regression-fixes/lifetimes/pre-fix-production-transport-legacy.mm	2026-09-23 14:57:40.290056636 +0900
++++ docs/evidence/2026-09-23-regression-fixes/lifetimes/production-transport-legacy.mm	2026-09-23 17:09:31.338977446 +0900
+@@ -244,9 +244,11 @@
+                         std::shared_ptr<const fsr::framegeneration::ExecutionLease>>;
+                     slot = std::make_shared<ExecutionSlot>(Lease{}, commandBuffer, leases);
+                     leases->retain(slot);
++                    // This Objective-C block outlives the visitor; capture an owning local.
++                    const auto completionSlot = slot;
+                     @try {
+                         [reinterpret_cast<id<MTLCommandBuffer>>(commandBuffer)
+-                            addCompletedHandler:^(id<MTLCommandBuffer>) { slot->retire(); }];
++                            addCompletedHandler:^(id<MTLCommandBuffer>) { completionSlot->retire(); }];
+                     } @catch (id) {
+                         // The native allocator retains the slot when no handler is installed.
+                     }

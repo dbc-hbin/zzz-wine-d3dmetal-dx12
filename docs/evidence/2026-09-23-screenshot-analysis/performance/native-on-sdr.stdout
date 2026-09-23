@@ -1,0 +1,7 @@
+msync: bootstrapped mach port on wine-5479817-msync-v2.
+msync: up and running.
+00f4:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+available_provider id=0xf5a5ca1e00c01005 name=3.1.5
+available_provider id=0xf5a5ca1e00803004 name=2.3.4
+BENCH mode=3.1.5 provider_id=0xf5a5ca1e00c01005 provider=3.1.5 module=Z:\tmp\yaagl-upscale-cost\native-current-alias\amd_fidelityfx_upscaler_dx12_original.dll dims=1128x624->1920x1080 mask=R8 flags=0 sharpen=on sharpness=0.5 warm=8 samples=24 api_ms_p50/p90=0.177/0.227 close_ms_p50/p90=0.001/0.002 execute_and_fence_wall_ms_p50/p90=1.793/1.900 fence_arm_cpu_ms_p50/p90=0.015/0.021 host_event_wait_ms_p50/p90=1.761/1.863 submit_to_fence_wall_ms_p50=1.793/1.901 dispatch_to_fence_wall_ms_p50/p90=1.954/2.099 output_mean=0.447650 result=PASS

@@ -25,6 +25,7 @@
 #include "function-hooks.hpp"
 #include "key.hpp"
 #include "d3dmetal-replay-hooks.hpp"
+#include "d3dmetal-transport.hpp"
 #include "layout.hpp"
 #include "persistent-cache.hpp"
 #include "rt-key.hpp"
@@ -39,7 +40,8 @@ using CompileCompute = void (*)(const void*, bool);
 using DestroyDevice = void (*)(const void*, const void*);
 constexpr std::size_t kHookCount = static_cast<std::size_t>(layout::Hook::Count);
 std::array<std::uintptr_t, kHookCount> originalFunctions{};
-std::array<std::uintptr_t, kHookCount> dispatchTable{};
+static_assert(layout::kCommitDispatchIndex == kHookCount);
+std::array<std::uintptr_t, kHookCount + 1> dispatchTable{};
 thread_local Context currentContext{};
 thread_local FunctionContext currentFunctionContext{};
 std::uintptr_t functionImageBase = 0;
@@ -469,6 +471,7 @@ __attribute__((constructor)) void initialize() noexcept {
             reinterpret_cast<std::uintptr_t>(&loadGraphicsFunctions),
             replayHooks[0],
             replayHooks[1],
+            reinterpret_cast<std::uintptr_t>(&d3dmetal::commitRecordedBatch),
         };
         auto& slot = *reinterpret_cast<std::uintptr_t*>(const_cast<std::uint8_t*>(base) + layout::kDataSlot);
         std::atomic_ref<std::uintptr_t>(slot).store(

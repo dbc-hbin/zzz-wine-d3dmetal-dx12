@@ -1,0 +1,15 @@
+device baseline          metal=    0.06 MiB footprint=    5.05 MiB rss=    5.87 MiB
+compiler baseline        metal=    0.06 MiB footprint=    5.06 MiB rss=    5.89 MiB
+caller textures          metal=   27.98 MiB footprint=    5.40 MiB rss=    6.16 MiB
+2026-09-23 15:59:35.451 sr-memory-probe[39717:31102773] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+warm 8 drained           metal=  239.75 MiB footprint=  307.24 MiB rss=   17.86 MiB
+steady 64 drained        metal=  239.75 MiB footprint=  307.24 MiB rss=   17.89 MiB
+input resize drained     metal=  251.19 MiB footprint=  318.78 MiB rss=   18.00 MiB
+return resize drained    metal=  239.75 MiB footprint=  307.34 MiB rss=   18.00 MiB
+steady 64 again          metal=  239.75 MiB footprint=  307.35 MiB rss=   18.02 MiB
+SCALER_DESTROY input=1128x624 output=1920x1080\nfeature reset/pool held  metal=  239.75 MiB footprint=  307.35 MiB rss=   18.02 MiB
+backend+textures gone/drained metal=  223.69 MiB footprint=  307.24 MiB rss=   18.01 MiB
+compiler released        metal=  223.69 MiB footprint=  307.20 MiB rss=   18.01 MiB

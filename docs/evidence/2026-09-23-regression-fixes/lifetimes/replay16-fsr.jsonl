@@ -1,0 +1,16 @@
+{"schema":1,"component":"fsr-pe","event":"api","sequence":1,"api":"query","type":4,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":2,"api":"query","type":4,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":3,"api":"query","type":65791,"handleAddress":0,"contextValue":0,"result":2,"reason":"query_rejected"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":4,"api":"query","type":4,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":5,"api":"query","type":65538,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":6,"api":"query","type":65539,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":7,"api":"query","type":65539,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":8,"api":"query","type":65539,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":9,"api":"query","type":65540,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":10,"api":"query","type":65540,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":11,"api":"query","type":65541,"handleAddress":0,"contextValue":0,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-metalfx","event":"create","context":1,"dispatch":0,"result":0}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":12,"api":"dispatch","type":0,"handleAddress":1113704,"contextValue":1338160,"result":6,"reason":"null_descriptor"}
+{"schema":1,"component":"fsr-metalfx","event":"dispatch","context":1,"dispatch":1,"result":0,"detail":"ok","resources":{"command":140420199841808,"color":140419643878416,"depth":140419643881984,"motion":140419643885056,"exposure":0,"reactive":0,"composition":0,"output":140419643887808},"states":[4,4,4,0,0,0,2],"render":[1248,696],"upscale":[3840,2160],"createRender":[1248,696],"createOutput":[3840,2160],"temporalOutput":[3744,2088],"placement":[48,36],"temporallyCapped":1,"jitter":[0,0],"motionScale":[1248,696],"sharpness":0,"frameTimeDelta":16.6667004,"preExposure":1,"camera":[0.100000001,1000,1.04719996,0],"reset":1,"sharpening":0,"flags":0}
+{"schema":1,"component":"fsr-pe","event":"api","sequence":13,"api":"dispatch","type":65537,"handleAddress":1113704,"contextValue":1338160,"result":0,"reason":"ok"}
+{"schema":1,"component":"fsr-metalfx","event":"destroy","context":1,"dispatch":0,"result":0}

@@ -1,0 +1,21 @@
+Exact compiler/overlay inputs for the completed timing run
+
+Instrumented Objective-C++ translation units compiled into the timing-only sidecar:
+- /tmp/yaagl-sr-d3dmetal-timing/instrumented/d3dmetal-transport.timing.mm: SHA-256 02df608fa0cc63e0b01784f6dcb41844bd81c0a737ea7992896c14267b14794b
+- /tmp/yaagl-sr-d3dmetal-timing/instrumented/metalfx-backend.timing.mm: SHA-256 1af3c3c579b85070821db94a8a4fc0c1488c79cd54638efd0e422061712d8873
+- /tmp/yaagl-lease-commit-build/layout.hpp: SHA-256 c530490b57bdff53cd53c6cbfdd2ea7d7b73865f9130ba823535968bb3a1d823
+- /tmp/yaagl-lease-commit-build/fsr-kernels.inc: SHA-256 0bad2641334f1777b023e60094ef05ef03569fee5717264632980dd3532ea295
+- d3dmetal-pso-cache/layout.json: SHA-256 9683fca4551df706f10212a1b6a8e88ff9eeb304ff720a0c20ae5135d5b38f9c
+
+Overlay:
+- Patched D3DMetal input from lifetimes agent: SHA-256 b9f5985c8f668023e04b3638fd2cacce60a9ff33b07aeb86f0544ac81e827f58
+- Timing sidecar copied into the clone and ad-hoc signed: SHA-256 a1183a1edd11ad5b95d675ad6ab7e48466267a1547020079b0e7fe8f2eef1ea0
+- D3DMetal in the clone after framework signing: SHA-256 68ed2758eb7227c56eefdb8312fdfe1d1a82ccb66e33cbebed074fab6ea378bc
+- Generated current helper in clone: SHA-256 46ee65bfbc8bb618cf09cac509dc35a928faab8a5bdc6e1bb0127725ea3635e9
+- Framework codesign verification passed.
+
+Build: xcrun clang++, x86_64, macOS deployment target 26.0, C++20, -O2 -Wall -Wextra -Werror, dynamic library, pthread, Foundation/Metal/QuartzCore/MetalFX. Timing code exists only in the two temporary source copies; the production working-tree sources were not edited by this task.
+
+The runtime source was build/release-v1.1.0/wine, cloned to /tmp/yaagl-sr-d3dmetal-timing/runtime/wine using cp -cR. `stat -f '%i %l %N'` showed separate inodes and link count 1 for the base and clone D3DMetal and native FG fallback files. Only the clone's D3DMetal framework, sidecar, current helper, and fallback were changed. No installed runtime or game files were modified.
+
+Source timing note: this SR-only execution used the no-vector commit wrapper source snapshot. A later FG-only typed-lease correction was reported by the lifetimes owner after the run; it does not affect this MFX path. Final all-mode integration uses a fresh final-source production overlay under the lifetimes task.

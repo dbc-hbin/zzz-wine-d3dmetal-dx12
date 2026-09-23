@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "source": "d3dmetal-pso-cache/fsr-translator.replay16.test.cpp",
+  "source_sha256": "306ef2194c60aa240840253d56074e1868490cc4537287fdea5206970281606e",
+  "compiler": "/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++",
+  "build_command": [
+    "/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++",
+    "-std=c++20",
+    "-O2",
+    "-static",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wno-switch",
+    "-I",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/fsr-translator.replay16.test.cpp",
+    "-ld3d12",
+    "-ld3dcompiler",
+    "-ldxgi",
+    "-lole32",
+    "-luser32",
+    "-o",
+    "/private/tmp/yaagl-lease-callback-probe/test-runs/run-1790148071736170000/fsr-translator.exe"
+  ],
+  "build_exit": 0,
+  "build_log": "/private/tmp/yaagl-lease-callback-probe/test-runs/run-1790148071736170000/build.log",
+  "runtime": "/private/tmp/yaagl-lease-callback-probe/runtime/wine",
+  "requested_command_buffer": "metal4",
+  "executable_sha256": "2b8621f8f235aaa0dbef363f6248329b504349d06499e4ada0cea77f07a0a145",
+  "run_command": [
+    "/private/tmp/yaagl-lease-callback-probe/runtime/wine/bin/wine",
+    "/private/tmp/yaagl-lease-callback-probe/test-runs/run-1790148071736170000/fsr-translator.exe"
+  ],
+  "run_exit": 0,
+  "duration_seconds": 31.015,
+  "run_log": "/private/tmp/yaagl-lease-callback-probe/test-runs/run-1790148071736170000/run.log",
+  "translator_log": "/private/tmp/yaagl-lease-callback-probe/test-runs/run-1790148071736170000/fsr.jsonl",
+  "passed": true,
+  "mode_behavior_passed": true,
+  "result_lines": [
+    "FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1 replays=16"
+  ]
+}

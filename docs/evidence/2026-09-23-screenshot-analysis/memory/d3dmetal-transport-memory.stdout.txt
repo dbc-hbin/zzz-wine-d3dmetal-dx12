@@ -1,0 +1,14 @@
+MEM pre-resources             metal=0.48 MiB footprint=8.45 MiB
+2026-09-23 13:59:43.283 transport-memory-probe[51379:30652062] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+MEM prepared owner draft      metal=222.52 MiB footprint=114.59 MiB
+MEM recorded before replay    metal=222.77 MiB footprint=114.73 MiB
+MEM feature released owner live metal=222.77 MiB footprint=114.74 MiB
+MEM translator replay 0       metal=222.77 MiB footprint=310.25 MiB
+MEM translator replay 3       metal=288.95 MiB footprint=361.85 MiB
+MEM translator replay 15      metal=481.70 MiB footprint=566.12 MiB
+MEM all GPU work complete     metal=481.70 MiB footprint=566.12 MiB
+MEM allocator reset retired   metal=240.77 MiB footprint=566.10 MiB
+PASS transport pins=1 resource_ref_balance=1 mpl_scheduler=1 empty_list=1 graphics_only_list=1 encoder_boundary=1 ordered_encode_policy=1 policy_reset=1 feature_release_before_replay=1 replays=16 leases_until_allocator_reset=16

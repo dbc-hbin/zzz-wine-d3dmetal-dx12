@@ -1,0 +1,39 @@
+msync: bootstrapped mach port on wine-54bfdc0-msync-v2.
+msync: up and running.
+002c:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0060:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+2026-09-23 16:52:03.566 wine[10261:31369913] Metal API Validation Enabled
+2026-09-23 16:52:03.566 wine[10263:31369914] Metal API Validation Enabled
+0058:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0058:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0058:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+0058:err:ole:start_rpcss Failed to open RpcSs service
+0060:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0060:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0060:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+2026-09-23 16:52:04.547 wine[10212:31369667] Metal API Validation Enabled
+2026-09-23 16:52:04.551 wine[10207:31369635] Metal API Validation Enabled
+2026-09-23 16:52:05.348 wine[10304:31370135] Metal API Validation Enabled
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\winebth.sys,-1" -> L"C:\\windows\\inf\\winebth.inf"
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\wineusb.sys,-1" -> L"C:\\windows\\inf\\wineusb.inf"
+00b8:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00b8:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00e4:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+0164:fixme:msg:pack_message msg 14 (WM_ERASEBKGND) not supported yet
+2026-09-23 16:52:22.557 wine[10606:31371185] Metal API Validation Enabled
+002c:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+2026-09-23 16:52:29.742 wine[10163:31369616] Metal API Validation Enabled
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+DYNAMIC_BACKING_PASS mv=low input=320x180/352x200 output=640x360/672x384
+DYNAMIC_BACKING_PASS mv=display input=320x180/352x200 output=640x360/672x384
+FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1

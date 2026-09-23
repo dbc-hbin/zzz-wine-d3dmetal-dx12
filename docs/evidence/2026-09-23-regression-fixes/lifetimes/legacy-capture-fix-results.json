@@ -1,0 +1,87 @@
+{
+  "schema": 1,
+  "fix": {
+    "file": "d3dmetal-pso-cache/d3dmetal-transport-legacy.mm",
+    "change": "Inside the std::visit([&]) body, copy slot to const auto completionSlot before registering MTLCommandBuffer's delayed completion block; the block captures completionSlot, not the outer reference-captured slot.",
+    "pre_fix_source_sha256": "46b5129a57e71cf4acfb9be4eb3091ea0466b5ce94c84df11e1eb13e235bfc96",
+    "post_fix_source_sha256": "3c4ff2b79a61583b54d7613d8fe085ecd19546ee3f8ad559c5d10d2a2caaf4bf",
+    "patch": "legacy-capture-fix.patch"
+  },
+  "pre_fix_reproduction": {
+    "command": "python3 scripts/test-fsr-translator.py --runtime /tmp/yaagl-lease-production-20260923/wine --command-buffer legacy --out /tmp/yaagl-lease-production-20260923/final-matrix/sr-legacy",
+    "run": "run-1790149971198781000",
+    "exit": 1,
+    "passed": false,
+    "result_lines": [],
+    "failure": [
+      "libc++abi: terminating due to uncaught exception of type std::__1::system_error: mutex lock failed: Invalid argument",
+      "D3D12_TEST_FAIL GPU timeout code=0x00000000"
+    ],
+    "raw_run_log": "pre-fix-sr-legacy-run.log",
+    "raw_fsr_log": "pre-fix-sr-legacy-fsr.jsonl",
+    "runner_evidence": "pre-fix-sr-legacy-run-evidence.json"
+  },
+  "post_fix_reproduction": {
+    "build": {
+      "command": "node scripts/build-d3dmetal-pso-cache.mjs /tmp/yaagl-lease-final-production-sidecar-20260923-postlegacyfix",
+      "test_controls": false,
+      "production_sidecar_sha256": "77d50505a51a8e863b081eec4e4cf066f89bbf7da8f579484ac771543713a43b",
+      "runtime_clone_sidecar_sha256": "77d50505a51a8e863b081eec4e4cf066f89bbf7da8f579484ac771543713a43b",
+      "runtime_clone_signed_d3dmetal_sha256": "0561d7695eaa55dc1fcb2af07db93db827580eb43a6f5a56c4d194067328e565",
+      "codesign_deep_verify": "valid on disk; satisfies its Designated Requirement",
+      "build_manifest": "production-sidecar-build-manifest.json"
+    },
+    "sr_legacy": {
+      "command": "python3 scripts/test-fsr-translator.py --runtime /tmp/yaagl-lease-production-20260923/wine --command-buffer legacy --out /tmp/yaagl-lease-production-20260923/postfix-legacy-sr",
+      "run": "run-1790151036032497000",
+      "exit": 0,
+      "passed": true,
+      "source": "d3dmetal-pso-cache/fsr-translator.d3d12.test.cpp",
+      "source_sha256": "17535baabd77192f262ffd726aac4fc1568152bd1f11b7724c1f050414a24e8f",
+      "marker": "FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1",
+      "raw_run_log": "post-fix-sr-legacy-run.log",
+      "raw_fsr_log": "post-fix-sr-legacy-fsr.jsonl",
+      "runner_evidence": "post-fix-sr-legacy-run-evidence.json"
+    },
+    "frame_generation_legacy": {
+      "command": "python3 scripts/test-fsr-translator.py --runtime /tmp/yaagl-lease-production-20260923/wine --frame-generation --command-buffer legacy --out /tmp/yaagl-lease-production-20260923/postfix-legacy-fg",
+      "run": "run-1790151055819529000",
+      "exit": 0,
+      "passed": true,
+      "source": "d3dmetal-pso-cache/fsr-framegeneration.d3d12.test.cpp",
+      "source_sha256": "c3972934be7dfe4bb2685772f5f99b04fcf11e7c56118ac13dffff64bae745cc",
+      "marker": "FSR_FRAMEGENERATION_D3D12_PASS builtin=4 cameraV1Absent=4 preselectionRejections=4 native=4 hudlessRectUi=4 distortionFallback=4 displayJitter=4 pq=4 scrgb=4 finiteDepthReversed=4 swapchainUiReadback=3",
+      "raw_run_log": "post-fix-fg-legacy-run.log",
+      "raw_fsr_log": "post-fix-fg-legacy-fsr.jsonl",
+      "runner_evidence": "post-fix-fg-legacy-run-evidence.json"
+    }
+  },
+  "metal4_scope": {
+    "sr": {
+      "run": "run-1790149916710139000",
+      "exit": 0,
+      "passed": true,
+      "marker": "FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1"
+    },
+    "frame_generation": {
+      "run": "run-1790149950402746000",
+      "exit": 0,
+      "passed": true,
+      "marker": "FSR_FRAMEGENERATION_D3D12_PASS builtin=4 cameraV1Absent=4 preselectionRejections=4 native=4 hudlessRectUi=4 distortionFallback=4 displayJitter=4 pq=4 scrgb=4 finiteDepthReversed=4 swapchainUiReadback=3"
+    },
+    "provenance_note": "These MTL4 runs used the uninstrumented corrected-backend sidecar before the legacy-only owning-capture source edit (sidecar SHA 53c9ec6f122ffc6eb10b1c66aa66720b99e36e9b4edfd57e3df7db1e150025fa). The fix touches only d3dmetal-transport-legacy.mm; no MTL4 callback code changed. Raw run artifacts and that build manifest are retained with the pre-legacy-capture-fix prefix."
+  },
+  "permanent_test_changes": "No new test-only helper or dependency was added. The existing legacy integration runner reproduced the failure before the fix and passed after it.",
+  "post_fix_cpu_lifetime_suite": {
+    "command": "python3 scripts/test-metalfx-native.py --suite lifetime --out /tmp/yaagl-transport-lifetime-postlegacyfix",
+    "run": "run-20260923T081702041190Z",
+    "build_exit": 0,
+    "run_exit": 0,
+    "passed": true,
+    "marker": "TRANSPORT_LIFETIME_PASS",
+    "transport_legacy_source_sha256": "3c4ff2b79a61583b54d7613d8fe085ecd19546ee3f8ad559c5d10d2a2caaf4bf",
+    "test_source_sha256": "b97aa3d80e5b34090542c40a49625a221791686b4bc031701fbde1b7c6b9e721",
+    "raw_results": "post-fix-lifetime-suite-results.json"
+  },
+  "safety": "Only the isolated /tmp staged runtime clone was patched and ad-hoc signed. No installed runtime, package, or game was changed."
+}

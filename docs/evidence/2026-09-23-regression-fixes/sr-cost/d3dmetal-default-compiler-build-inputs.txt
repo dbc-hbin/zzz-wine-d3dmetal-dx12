@@ -1,0 +1,13 @@
+MTL_HUD_ENABLED=0; RUN_CONTROL=0; DEFAULT_COMPILER=1; CONFIG_PROBE=1
+YAAGL_FSR_UPSCALER=metalfx; D3DM_MTL4=1; D3DM_ENABLE_METALFX=1; MTL_CAPTURE_ENABLED=0
+helper_sha256: 46ee65bfbc8bb618cf09cac509dc35a928faab8a5bdc6e1bb0127725ea3635e9  /tmp/yaagl-sr-d3dmetal-default-compiler/runtime/wine/bin/yaagl-frame-probe-exec
+patched_D3DMetal_sha256: 3110e398fea2be2b987739dda29cc3c174a056137e226f38903da10e2d35d308  /tmp/yaagl-sr-d3dmetal-default-compiler/runtime/wine/lib/external/D3DMetal.framework/Versions/A/D3DMetal
+instrumented_sidecar_sha256: 6123df1bf84cc639fe7d254855aa104da3ca14b294f83978d9e6acd8ac393385  /tmp/yaagl-sr-d3dmetal-default-compiler/runtime/wine/lib/external/D3DMetal.framework/Versions/A/Resources/libYaaglNativePsoCache.dylib
+compiler input hashes (test-only TUs + generated headers):
+c382dfb8a538f8f1918ff1b09802a8a5390e347405f855c2ae954a6bb97cd6c9  /tmp/yaagl-sr-d3dmetal-default-compiler/instrumented/d3dmetal-transport.timing.mm
+b81d32f98853d0e87229135caee9cae988ec5d1f6c1ea4233e90b776a43bb241  /tmp/yaagl-sr-d3dmetal-default-compiler/instrumented/metalfx-backend.timing.mm
+c530490b57bdff53cd53c6cbfdd2ea7d7b73865f9130ba823535968bb3a1d823  /tmp/yaagl-lease-commit-build/layout.hpp
+0bad2641334f1777b023e60094ef05ef03569fee5717264632980dd3532ea295  /tmp/yaagl-lease-commit-build/fsr-kernels.inc
+9683fca4551df706f10212a1b6a8e88ff9eeb304ff720a0c20ae5135d5b38f9c  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/layout.json
+b9f5985c8f668023e04b3638fd2cacce60a9ff33b07aeb86f0544ac81e827f58  /tmp/yaagl-lease-commit-D3DMetal
+d3dmetal-default-compiler.stdout sha256: 08a13e408958aed5724b56a20ff11f51cf287131cebbfc7628ff06e7960cb169

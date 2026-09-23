@@ -1,0 +1,32 @@
+wine: created the configuration directory '/tmp/yaagl-sr-d3dmetal-timing/metalfx-control-prefix'
+msync: bootstrapped mach port on wine-549e13e-msync-v2.
+msync: up and running.
+002c:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0058:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0060:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0060:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0060:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+0060:err:ole:start_rpcss Failed to open RpcSs service
+0058:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0058:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0058:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\winebth.sys,-1" -> L"C:\\windows\\inf\\winebth.inf"
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\wineusb.sys,-1" -> L"C:\\windows\\inf\\wineusb.inf"
+00b8:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00b8:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00e4:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+0164:fixme:msg:pack_message msg 14 (WM_ERASEBKGND) not supported yet
+002c:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+available_provider id=0x4d46580000000001 name=MetalFX (FSR 4 API)
+BENCH mode=mfx provider_id=0x4d46580000000001 provider=MetalFX (FSR 4 API) module=Z:\tmp\yaagl-sr-d3dmetal-timing\metalfx-workload\amd_fidelityfx_upscaler_dx12.dll dims=1128x624->1920x1080 mask=R8 create_flags=32 dispatch_flags=0 sharpen=off sharpness=0.5 warm=8 samples=24 api_ms_p50/p90=0.116/0.135 close_ms_p50/p90=0.001/0.001 execute_and_fence_wall_ms_p50/p90=4.089/4.249 fence_arm_cpu_ms_p50/p90=0.018/0.025 host_event_wait_ms_p50/p90=4.024/4.213 submit_to_fence_wall_ms_p50/p90=4.090/4.250 dispatch_to_fence_wall_ms_p50/p90=4.206/4.392 output_mean=0.449135 result=PASS

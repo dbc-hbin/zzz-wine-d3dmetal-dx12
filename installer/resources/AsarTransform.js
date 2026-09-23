@@ -260,7 +260,7 @@
     return prior;
   }
 
-  function launchChanges(sourceFile) {
+  function launchChanges(sourceFile, targetId) {
     var matches = functionNodes(sourceFile).filter(function (candidate) {
       if (!candidate.body) return false;
       var bodyText = text(candidate.body, sourceFile);
@@ -304,6 +304,9 @@
     if (configBindings.length !== 1) throw new Error("could not unambiguously locate the game launch config");
 
     var config = configBindings[0];
+    // v1.0.5 selected DX12 by runtime id, regardless of the stored setting.
+    var priorForcedStatement = wine + ".attributes.id===" + JSON.stringify(targetId) + "&&" + wine + ".attributes.renderBackend===\"d3dmetal\"&&" + argumentsName + ".push(\"-use-d3d12\");";
+    var legacyForced = d3d12Statements.length === 1 && text(d3d12Statements[0], sourceFile).replace(/\s+/g, "") === priorForcedStatement;
     var d3d12Statement = config + ".useD3D12&&" + wine + ".attributes.supportsD3d12===true&&" + argumentsName + ".push(\"-use-d3d12\");";
     var changes = d3d12Statements.length ? [{
       start: d3d12Statements[0].getStart(sourceFile),
@@ -337,7 +340,45 @@
         replacement: ",..." + argumentsName
       });
     }
-    return changes;
+    return { changes: changes, legacyForced: legacyForced };
+  }
+
+  function legacyDx12PreferenceChanges(sourceFile, targetId) {
+    var keys = [];
+    visit(sourceFile, function (node) {
+      if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer && stringLiteralValue(node.initializer) === "config_use_d3d12") keys.push(node.name.text);
+    });
+    if (keys.length !== 1) throw new Error("could not unambiguously locate the DX12 storage key");
+    var key = keys[0];
+    var functions = functionNodes(sourceFile).filter(function (candidate) {
+      return candidate.body && text(candidate.body, sourceFile).includes("SETTING_D3D12") && text(candidate.body, sourceFile).includes("useD3D12");
+    });
+    if (functions.length !== 1) throw new Error("could not unambiguously locate the DX12 setting initializer");
+    var functionNode = functions[0];
+    var wineBindings = [];
+    functionNode.parameters.forEach(function (parameter) {
+      if (!ts.isObjectBindingPattern(parameter.name)) return;
+      parameter.name.elements.forEach(function (element) {
+        var name = element.propertyName ? staticPropertyName(element.propertyName) : staticPropertyName(element.name);
+        if (name === "wine" && ts.isIdentifier(element.name)) wineBindings.push(element.name.text);
+      });
+    });
+    if (wineBindings.length !== 1) throw new Error("could not unambiguously locate the DX12 setting Wine instance");
+    var initializers = [];
+    visit(functionNode.body, function (node) {
+      if (ts.isTryStatement(node) && text(node, sourceFile).includes("useD3D12")) initializers.push(node);
+    });
+    if (initializers.length !== 1) throw new Error("could not unambiguously locate the DX12 stored preference read");
+    var initializer = initializers[0];
+    var original = text(initializer, sourceFile).replace(/\s+/g, "");
+    var read = original.match(/^try\{([A-Za-z_$][\w$]*)\.useD3D12=await([A-Za-z_$][\w$]*)\(([A-Za-z_$][\w$]*)\)=="true"\}catch\{\1\.useD3D12=!1\}$/);
+    if (!read || read[3] !== key) throw new Error("DX12 stored preference initializer changed unexpectedly");
+    var config = read[1];
+    var body = text(functionNode.body, sourceFile);
+    var setter = body.match(new RegExp("await\\s+([A-Za-z_$][\\w$]*)\\(" + key + ",\\s*" + config + "\\.useD3D12\\?"));
+    if (!setter) throw new Error("could not locate the DX12 preference writer");
+    var migration = "try{const keys=await Neutralino.storage.getKeys();if(keys.includes(" + key + ")){" + config + ".useD3D12=await " + read[2] + "(" + key + ")==\"true\"}else{" + config + ".useD3D12=" + wineBindings[0] + ".attributes.id===" + JSON.stringify(targetId) + "&&" + wineBindings[0] + ".attributes.renderBackend===\"d3dmetal\"&&" + wineBindings[0] + ".attributes.supportsD3d12===true;if(" + config + ".useD3D12)await " + setter[1] + "(" + key + ",\"true\")}}catch{" + config + ".useD3D12=false}";
+    return [{ start: initializer.getStart(sourceFile), end: initializer.end, replacement: migration }];
   }
 
   function precomposedD3DMetalChanges(sourceFile) {
@@ -582,7 +623,9 @@
       }
       changes = changes.concat(localInstallerChanges(sourceFile, targetId, protectedRuntimeIds));
       changes = changes.concat(precomposedD3DMetalChanges(sourceFile));
-      changes = changes.concat(launchChanges(sourceFile));
+      var launch = launchChanges(sourceFile, targetId);
+      changes = changes.concat(launch.changes);
+      if (launch.legacyForced) changes = changes.concat(legacyDx12PreferenceChanges(sourceFile, targetId));
       changes = changes.concat(updaterChanges(sourceFile, options));
       var output = applyChanges(source, changes);
       var outputFile = parse(output);

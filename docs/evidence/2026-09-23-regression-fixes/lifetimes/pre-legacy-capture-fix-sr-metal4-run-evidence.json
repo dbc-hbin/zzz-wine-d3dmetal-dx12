@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "source": "d3dmetal-pso-cache/fsr-translator.d3d12.test.cpp",
+  "source_sha256": "17535baabd77192f262ffd726aac4fc1568152bd1f11b7724c1f050414a24e8f",
+  "compiler": "/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++",
+  "build_command": [
+    "/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++",
+    "-std=c++20",
+    "-O2",
+    "-static",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wno-switch",
+    "-I",
+    "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache",
+    "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/fsr-translator.d3d12.test.cpp",
+    "-ld3d12",
+    "-ld3dcompiler",
+    "-ldxgi",
+    "-lole32",
+    "-luser32",
+    "-o",
+    "/private/tmp/yaagl-lease-production-20260923/final-matrix/sr-metal4/run-1790149916710139000/fsr-translator.exe"
+  ],
+  "build_exit": 0,
+  "build_log": "/private/tmp/yaagl-lease-production-20260923/final-matrix/sr-metal4/run-1790149916710139000/build.log",
+  "runtime": "/private/tmp/yaagl-lease-production-20260923/wine",
+  "requested_command_buffer": "metal4",
+  "executable_sha256": "800d4c238dac1281f73b4965f9f5ffc6f0be7f77b4087f37c2e2ed8849352b50",
+  "run_command": [
+    "/private/tmp/yaagl-lease-production-20260923/wine/bin/wine",
+    "/private/tmp/yaagl-lease-production-20260923/final-matrix/sr-metal4/run-1790149916710139000/fsr-translator.exe"
+  ],
+  "run_exit": 0,
+  "duration_seconds": 33.061,
+  "run_log": "/private/tmp/yaagl-lease-production-20260923/final-matrix/sr-metal4/run-1790149916710139000/run.log",
+  "translator_log": "/private/tmp/yaagl-lease-production-20260923/final-matrix/sr-metal4/run-1790149916710139000/fsr.jsonl",
+  "passed": true,
+  "mode_behavior_passed": true,
+  "result_lines": [
+    "FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1"
+  ]
+}

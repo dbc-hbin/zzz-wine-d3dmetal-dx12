@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "run": {
+    "path": "/tmp/yaagl-lease-callback-probe/test-runs/run-1790148071736170000/",
+    "command": "python3 /tmp/yaagl-lease-callback-probe/source/scripts/test-fsr-translator.py --runtime /tmp/yaagl-lease-callback-probe/runtime/wine --out /tmp/yaagl-lease-callback-probe/test-runs",
+    "exit": 0,
+    "passed": true,
+    "readback": "FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1 replays=16",
+    "resolution": { "caller": "3840x2160 (4K; not 1080p)", "temporal": "3744x2088", "placement": "48,36" },
+    "probe_test_source_sha256": "306ef2194c60aa240840253d56074e1868490cc4537287fdea5206970281606e",
+    "probe_runner_source_sha256": "a8d9e38b93068820e1ec5eaa40e7356b47ecb61adb8141f934fad9470358ee2e"
+  },
+  "initial_lifetime_regression_suite_before_legacy_capture_fix": {
+    "command": "python3 scripts/test-metalfx-native.py --suite lifetime --out /tmp/yaagl-transport-lifetime-native",
+    "run": "run-20260923T065702987294Z",
+    "build_exit": 0,
+    "run_exit": 0,
+    "passed": true,
+    "marker": "TRANSPORT_LIFETIME_PASS",
+    "test_source_sha256": "b97aa3d80e5b34090542c40a49625a221791686b4bc031701fbde1b7c6b9e721",
+    "production_transport_hpp_sha256": "3256d1a0b5ecd6b6634de7fcdfc6f8377d05890d42cfec5cfc42f65f5ac19a67",
+    "production_transport_mm_sha256": "766766bb436c65675910c3a9882cf7237c12d69b8a1aacdffa4cc18dddb01ded",
+    "production_transport_legacy_mm_sha256": "46b5129a57e71cf4acfb9be4eb3091ea0466b5ce94c84df11e1eb13e235bfc96"
+  },
+  "execution": {
+    "replay_count": 16,
+    "same_closed_d3d12_command_list": "00007FB620218010",
+    "same_d3d12_command_allocator": "00007FB5BF76A090",
+    "allocator_reset_during_replay_loop": false,
+    "allocator_reset_after_replay_16": true,
+    "same_metal_command_buffer": "0x245b64008",
+    "feature_id": 1,
+    "evaluation_id": 1,
+    "per_owner_state_replay_sequence": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    "owner_identity_basis": "The temporary instrumentation increments replaySequence on OwnerState and emits feature/evaluation IDs for every encode and retirement; the identical feature/evaluation and one monotonically increasing per-owner sequence 1..16 identify one owner across the same already-recorded list. The raw log does not print the OwnerState address.",
+    "completion_callbacks": 16,
+    "callbacks_before_corresponding_d3d12_fence_wait_return": true,
+    "owner_slots_after_each_callback": 0,
+    "retained_slots_at_post_loop_owner_destruction": 0
+  },
+  "metal_current_allocated_size": {
+    "after_encode_replay_1_bytes": 453787648,
+    "after_encode_replay_1_mib": 432.765625,
+    "after_encode_replays_2_to_16_bytes": 451313664,
+    "after_encode_replays_2_to_16_mib": 430.40625,
+    "before_each_callback_bytes": 451313664,
+    "before_each_callback_mib": 430.40625,
+    "after_each_callback_bytes": 451313664,
+    "after_each_callback_mib": 430.40625,
+    "after_post_loop_owner_destruction_bytes": 451313664,
+    "after_post_loop_owner_destruction_mib": 430.40625,
+    "interpretation": "Metal currentAllocatedSize stayed flat at 430.406 MiB for replays 2–16 and across callback before/after samples; there is no per-replay linear accumulation. This is bounded allocator reuse, not evidence of immediate physical memory release: currentAllocatedSize did not fall across the callbacks. Replay 1 had a transient 432.765625 MiB sample. Do not compare this run's absolute value against a different native fixture."
+  },
+  "patch_provenance": {
+    "layout_format_version": 10,
+    "regular_hook_count": 19,
+    "dispatch_entries_including_commit_hook": 20,
+    "commit_hook_dispatch_field_offset": 152,
+    "commit_hook_dispatch_index": 19,
+    "commit_hook_entry_offset": 1397695,
+    "commit_hook_original_hex": "ff15638f3500",
+    "commit_hook_patched_hex": "e8ac86350090",
+    "commit_hook_gate_offset": 4905584,
+    "commit_hook_gate_hex": "48833d28a7070000740e4c8b1d1fa7070041ffa398000000ff259a080000",
+    "layout_json_sha256": "9683fca4551df706f10212a1b6a8e88ff9eeb304ff720a0c20ae5135d5b38f9c",
+    "patcher_source_sha256": "feb886c9f24d537dd70a3b07cf4339a9a0daee5d3c886972285acd3758b2bcbd",
+    "patched_d3dmetal_payload_sha256": "02b61d8d91b9c6188f89571fd67badcc819b040b87b06c9ad659863037729114",
+    "patched_d3dmetal_pre_sign_sha256": "b9f5985c8f668023e04b3638fd2cacce60a9ff33b07aeb86f0544ac81e827f58",
+    "callback_clone_signed_d3dmetal_sha256": "87c5b7dd41f43c37553360dea481ee5ad6451902c6bedbb1193fe5d1b55629fd",
+    "instrumented_sidecar_sha256": "6f330cb56ec3993e45659dcbeb808067fe76cc710ccd9bde408dd62701d2854f"
+  },
+  "scope_and_limits": [
+    "The instrumented sidecar and patched D3DMetal ran only in an isolated copy-on-write staged runtime clone; no installed runtime or game was changed.",
+    "This instrumented sidecar was built before the separate MetalFX dependent-blit barrier correction; it establishes callback and bounded-allocation behavior only. Uninstrumented MTL4 SR/FG and post-capture-fix Legacy SR/FG runs are separately recorded in legacy-capture-fix-results.json with their source/build provenance.",
+    "The temporary probe sources, command, and raw outputs are preserved beside this analysis; the build manifest contains the full source hash set and compiler arguments. The exact instrumented sidecar SHA-256 is recorded, but the compiled binary is intentionally not stored in docs."
+  ]
+}

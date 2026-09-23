@@ -104,14 +104,47 @@ function upstreamFunctions(ts, source) {
   const file = ts.createSourceFile("upstream.js", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   const found = new Map();
   const visit = node => {
-    if (ts.isFunctionDeclaration(node) && node.name && (node.name.text === "oc" || node.name.text === "V_")) {
+    if (ts.isFunctionDeclaration(node) && node.name && (node.name.text === "oc" || node.name.text === "V_" || node.name.text === "K_")) {
       found.set(node.name.text, source.slice(node.getStart(file), node.end));
     }
     ts.forEachChild(node, visit);
   };
   visit(file);
-  assert.equal(found.size, 2, "supported upstream fixture must retain its runner factory and game launch function");
-  return { factory: found.get("oc"), launch: found.get("V_") };
+  assert.equal(found.size, 3, "fixture must retain its runner, launch, and D3D12 setting functions");
+  return { factory: found.get("oc"), launch: found.get("V_"), settings: found.get("K_") };
+}
+
+async function settingHarness(ts, source, distro, stored = new Map(), storageError = null) {
+  const functions = upstreamFunctions(ts, source);
+  const config = {};
+  let effect;
+  let setSignal;
+  const context = vm.createContext({
+    Neutralino: { storage: { getKeys: async () => {
+      if (storageError === "keys") throw new Error("storage enumeration unavailable");
+      return [...stored.keys()];
+    } } },
+    we: async key => {
+      if (storageError === "read") throw new Error("storage read unavailable");
+      if (!stored.has(key)) throw new Error("key absent");
+      return stored.get(key);
+    },
+    he: async (key, value) => {
+      if (storageError === "write") throw new Error("storage write unavailable");
+      stored.set(key, value);
+    },
+    le: initial => {
+      let value = initial;
+      setSignal = next => { value = typeof next === "function" ? next(value) : next; };
+      return [() => value, setSignal];
+    },
+    De: callback => { effect = callback; },
+    ke: value => assert.notEqual(value, undefined),
+    pe: undefined,
+  });
+  vm.runInContext(["const bl=\"config_use_d3d12\";", functions.settings, "globalThis.__settings=K_;"].join("\n"), context);
+  await context.__settings({ locale: {}, config, wine: { attributes: distro.attributes } });
+  return { config, stored, toggle: () => setSignal(value => !value), runEffect: () => effect() };
 }
 
 function launchHarness(ts, source, distro) {
@@ -285,6 +318,62 @@ const transformer = loadTransformer(transformerPath);
 
 test("DX12 launch registration uses transformed catalog entries and leaves prior Wine entries unforced", async () => {
   await assertFixedTransformer(transformer, upstreamSource);
+});
+
+test("v1.0.5 forced DX12 upgrade migrates only an absent preference and preserves later OFF", async () => {
+  const forced = "n.attributes.id===" + JSON.stringify(targetId) + "&&n.attributes.renderBackend===\"d3dmetal\"&&u.push(\"-use-d3d12\");";
+  const historical = historicLaunchSource(transformer, upstreamSource, forced).replace("\"supportsD3d12\":true}", "}");
+  const oldTarget = catalogEntries(transformer.ts, historical).find(entry => entry.id === targetId);
+  assert.equal(oldTarget.attributes.supportsD3d12, undefined, "v1.0.5 target predates capability metadata");
+  const oldSetting = await settingHarness(transformer.ts, historical, oldTarget);
+  assert.equal(oldSetting.config.useD3D12, false);
+  for (const steam of [false, true]) await assertLaunchArguments(transformer.ts, historical, oldTarget, steam, oldSetting.config.useD3D12, 1);
+
+  const upgraded = transformSource(transformer, historical);
+  const target = catalogEntries(transformer.ts, upgraded.source).find(entry => entry.id === targetId);
+  const priorOffStorage = new Map([["config_use_d3d12", "false"]]);
+  const priorOff = await settingHarness(transformer.ts, upgraded.source, target, priorOffStorage);
+  assert.equal(priorOff.config.useD3D12, false, "old explicit OFF must survive the upgrade");
+  assert.equal(priorOffStorage.get("config_use_d3d12"), "false");
+  for (const steam of [false, true]) await assertLaunchArguments(transformer.ts, upgraded.source, target, steam, priorOff.config.useD3D12, 0);
+
+  const stored = new Map();
+  const migrated = await settingHarness(transformer.ts, upgraded.source, target, stored);
+  assert.equal(migrated.config.useD3D12, true, "missing old preference retains effective DX12");
+  assert.equal(stored.get("config_use_d3d12"), "true", "migration must persist before launch");
+  for (const steam of [false, true]) await assertLaunchArguments(transformer.ts, upgraded.source, target, steam, migrated.config.useD3D12, 1);
+
+  migrated.toggle();
+  migrated.runEffect();
+  assert.equal(stored.get("config_use_d3d12"), "false", "the actual setting lifecycle must persist user OFF");
+  const explicitOff = await settingHarness(transformer.ts, upgraded.source, target, stored);
+  assert.equal(explicitOff.config.useD3D12, false);
+  for (const steam of [false, true]) await assertLaunchArguments(transformer.ts, upgraded.source, target, steam, explicitOff.config.useD3D12, 0);
+
+  const otherSupported = { attributes: { id: experimentalId, renderBackend: "d3dmetal", winePath: "wine", supportsD3d12: true } };
+  const unrelatedStorage = new Map();
+  const unrelatedSetting = await settingHarness(transformer.ts, upgraded.source, otherSupported, unrelatedStorage);
+  assert.equal(unrelatedSetting.config.useD3D12, false, "another supported runtime was not forced by v1.0.5");
+  assert.equal(unrelatedStorage.size, 0, "another supported runtime must not consume the one-time migration");
+  for (const steam of [false, true]) await assertLaunchArguments(transformer.ts, upgraded.source, otherSupported, steam, unrelatedSetting.config.useD3D12, 0);
+  const selectedLater = await settingHarness(transformer.ts, upgraded.source, target, unrelatedStorage);
+  assert.equal(selectedLater.config.useD3D12, true, "selecting the legacy target later must still migrate");
+  assert.equal(unrelatedStorage.get("config_use_d3d12"), "true");
+  const unsupported = { attributes: { id: targetId, renderBackend: "dxmt", winePath: "wine", supportsD3d12: true } };
+  const absentUnsupported = await settingHarness(transformer.ts, upgraded.source, unsupported);
+  assert.equal(absentUnsupported.config.useD3D12, false);
+  for (const failure of ["keys", "write"]) {
+    const failedStorage = await settingHarness(transformer.ts, upgraded.source, target, new Map(), failure);
+    assert.equal(failedStorage.config.useD3D12, false, failure + " failure must not masquerade as a missing preference");
+  }
+  const failedRead = await settingHarness(transformer.ts, upgraded.source, target, new Map([["config_use_d3d12", "true"]]), "read");
+  assert.equal(failedRead.config.useD3D12, false, "stored preference read failure must fail safe");
+  const fresh = transformSource(transformer, upstreamSource);
+  const freshTarget = catalogEntries(transformer.ts, fresh.source).find(entry => entry.id === targetId);
+  assert.equal((await settingHarness(transformer.ts, fresh.source, freshTarget)).config.useD3D12, false, "fresh/settings-driven frontend has no forced history");
+  const repeated = transformSource(transformer, upgraded.source);
+  assert.equal(repeated.changed, false);
+  assert.equal((await settingHarness(transformer.ts, repeated.source, target, stored)).config.useD3D12, false);
 });
 
 test("DX12 launch registration upgrades the historical absent-runner-id guard", async () => {

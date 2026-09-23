@@ -1,0 +1,22 @@
+SCALER_OBJ_DEALLOC count=1
+MEM sentinel control       metal=0.06 MiB footprint=5.13 MiB scaler_dealloc=1
+2026-09-23 13:59:29.659 native-scaler-lifetime-control[51107:30651580] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+MEM native A live          metal=178.19 MiB footprint=111.09 MiB scaler_dealloc=1
+MEM native A retired       metal=178.19 MiB footprint=111.09 MiB scaler_dealloc=1
+2026-09-23 13:59:29.695 native-scaler-lifetime-control[51107:30651575] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+MEM native B live          metal=337.45 MiB footprint=156.93 MiB scaler_dealloc=1
+MEM native B retired       metal=337.45 MiB footprint=156.93 MiB scaler_dealloc=1
+2026-09-23 13:59:29.723 native-scaler-lifetime-control[51107:30651579] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+MEM native A2 live         metal=496.89 MiB footprint=201.35 MiB scaler_dealloc=1
+MEM native A2 retired      metal=496.89 MiB footprint=201.35 MiB scaler_dealloc=1
+MEM compiler released      metal=496.89 MiB footprint=201.35 MiB scaler_dealloc=1
+AFTER_DEVICE_RELEASE_OUTER_POOL scaler_dealloc=1

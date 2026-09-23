@@ -19,6 +19,8 @@ The installer detects the Yaagl application and support directories, installs it
 
 A same-name runtime can be reinstalled. The bundled archive replaces both the cached archive and runtime directory instead of treating the matching name as proof that the files are current. If final Wine-selection activation fails, the installer restores the runtime and selection from immediately before that attempt without consuming the original restore backup. “Update” means replacing the runtime with the build bundled in the installer being run; it is not an online update check.
 
+The current installer source (not yet included in existing release ZIPs) preserves a provable v1.0.5 forced-DX12 default on upgrade: it saves DX12 ON only when the old forced-launch rule is present, the same target D3DMetal runtime is selected and supports DX12, and no DX12 preference was stored. A saved OFF is never overwritten. Fresh and already settings-driven launchers retain their settings-based behavior; an ambiguous v1.1.x preference is not guessed from its value.
+
 ### Terminal installer
 
 The target picker supports **Yaagl ZZZ OS**, **Yaagl ZZZ OS DX12 Beta** (global), and **Yaagl ZZZ DX12 Beta** (CN), including the [DX12 beta release](https://github.com/dbc-hbin/yaagl-ZZZ-DX12/releases). Each target uses its own matching `~/Library/Application Support/<launcher name>` directory; installing into a beta does not replace the stable launcher's Wine. Launch a newly installed Yaagl once to create its support directory, then quit it before using the installer. Stable is selected by default when installed; otherwise an installed beta is detected.
@@ -39,8 +41,9 @@ For a beta CLI install, pass `--app-path "/Applications/Yaagl ZZZ OS DX12 Beta.a
 
 ### FSR upscaling to MetalFX
 
-- The launch wrapper fixes the public graphics identity to AMD Radeon RX 9070 (`0x1002:0x7550`). It does not spoof an NVIDIA adapter.
+- The launch wrapper fixes the public graphics identity to AMD Radeon RX 9070 (`0x1002:0x7550`). It does not spoof an NVIDIA adapter. The FSR staging helper leaves the caller's `MTL_HUD_ENABLED` unchanged (including unset or empty); enable the Metal HUD explicitly when diagnosing a newly staged runtime.
 - The builtin `amd_fidelityfx_upscaler_dx12` module implements the public FSR API boundary and translates accepted temporal-upscaling work to MetalFX. It does not execute AMD's FSR4 neural network.
+- In newly staged runtimes, `YAAGL_FSR_UPSCALER=metalfx` (also the unset/empty default) selects that builtin upscaler; `YAAGL_FSR_UPSCALER=native` selects the game's original canonical upscaler DLL without a builtin fallback. This explicit SR comparison option survives the launch wrapper; it does not change the frame-generation provider policy. Other values stop before Wine launches. Existing release archives do not gain this option until rebuilt.
 - Native AA and the Quality, Balanced, Performance, and Ultra Performance modes remain explicit game/provider choices. The translator does not silently select a quality mode. When a request exceeds MetalFX's maximum temporal scale, the MetalFX output is capped to a single uniform scale, centered in the caller's own output texture, and the surrounding texels are preserved.
 - The game remains the source of truth for an explicit OFF selection. The runtime does not auto-enable upscaling or frame generation.
 - All Macs use the system-default MetalFX temporal model. There is no hardware-name heuristic, mandatory BBR policy, or private model-version override.
@@ -89,6 +92,10 @@ Next verification should use game captures with disocclusion and mixed motion at
 - Log entries report API, encode, or callback progress. They do not prove GPU completion, image quality, FPS, or an OFF transition.
 
 The removed DLSS-only path is not a hidden compatibility option: the production bridge and build inventory no longer include NGX entry hooks, NGX reprojection helpers or smoke fixtures, DLSS exposure correction, temporal interception, or the old frame-probe implementation and controls. The two shared command-replay hooks required by FSR are isolated in `d3dmetal-replay-hooks.{hpp,mm}`; layout v9 contains 17 PSO/cache hooks plus these two replay hooks, without restoring DLSS translation.
+
+**Unreleased source:** layout v10 adds a Metal4 queue-commit hook for GPU-completion retirement, bringing the dispatch table to 20 entries (17 PSO/cache, two replay, one commit). This requires rebuilding the paired D3DMetal patch and native sidecar; the existing release archives are unchanged.
+
+The current source retires completed execution leases without waiting for allocator Reset, while retaining owner-based fallback for unsubmitted work or failed callback registration. SR also reuses compatible scaler capacity for smaller active inputs, with history resets and synchronized edge staging. [Measured memory results and limits](docs/screenshot-sr-analysis-2026-09-23.ko.md) distinguish bounded allocation reuse from immediate physical release and from the unverified game-wide memory difference.
 
 ### Verification status
 

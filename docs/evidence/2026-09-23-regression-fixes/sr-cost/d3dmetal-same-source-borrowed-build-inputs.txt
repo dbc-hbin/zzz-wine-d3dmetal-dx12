@@ -1,0 +1,30 @@
+MTL_HUD_ENABLED=0; RUN_CONTROL=0; DEFAULT_COMPILER=0; CONFIG_PROBE=1; VARIANT=borrowed
+TIMED_PREFIX=/tmp/yaagl-sr-d3dmetal-same-source-pair/metalfx-borrowed-prefix; TIMING_OUTPUT=/tmp/yaagl-sr-d3dmetal-same-source-pair/metalfx-d3dmetal-borrowed.stdout
+YAAGL_FSR_UPSCALER=metalfx; D3DM_MTL4=1; D3DM_ENABLE_METALFX=1; MTL_CAPTURE_ENABLED=0
+helper_sha256: 46ee65bfbc8bb618cf09cac509dc35a928faab8a5bdc6e1bb0127725ea3635e9  /tmp/yaagl-sr-d3dmetal-same-source-pair/runtime/wine/bin/yaagl-frame-probe-exec
+patched_D3DMetal_sha256: f9906fb53c8e0a0a302949dde7ee920b72b5ec2693ff46befb9282833978bfae  /tmp/yaagl-sr-d3dmetal-same-source-pair/runtime/wine/lib/external/D3DMetal.framework/Versions/A/D3DMetal
+instrumented_sidecar_sha256: 989f5de01f1da313fbcb027abca81a8a334ddbbf0185e22d5565fbc38b2407a1  /tmp/yaagl-sr-d3dmetal-same-source-pair/runtime/wine/lib/external/D3DMetal.framework/Versions/A/Resources/libYaaglNativePsoCache.dylib
+test-only transformed source and generated-header hashes:
+c382dfb8a538f8f1918ff1b09802a8a5390e347405f855c2ae954a6bb97cd6c9  /tmp/yaagl-sr-d3dmetal-same-source-pair/instrumented/d3dmetal-transport.timing.mm
+2656a9be552f5a4e1abdddbd0786e1058c63b4cdbd5d38d9126cb590cdbd701b  /tmp/yaagl-sr-d3dmetal-same-source-pair/instrumented/metalfx-backend.timing.mm
+c530490b57bdff53cd53c6cbfdd2ea7d7b73865f9130ba823535968bb3a1d823  /tmp/yaagl-lease-commit-build/layout.hpp
+0bad2641334f1777b023e60094ef05ef03569fee5717264632980dd3532ea295  /tmp/yaagl-lease-commit-build/fsr-kernels.inc
+9683fca4551df706f10212a1b6a8e88ff9eeb304ff720a0c20ae5135d5b38f9c  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/layout.json
+b9f5985c8f668023e04b3638fd2cacce60a9ff33b07aeb86f0544ac81e827f58  /tmp/yaagl-lease-commit-D3DMetal
+production source and instrumentation transform hashes:
+4e60ab13f1c94e6bc21e795911bcc0356272f309220e7956d0bc22a63d97e69a  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/cache.mm
+5bf87bfbdb1cdc07e3f2b80ffc4d43e897f3fd018d5ed05aa2ee16787a3f52a7  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/function-cache.mm
+0c438e38a871ac3254836248afa0c35e0dabad5982afd611cdd2d27df666b3c4  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/function-hooks.mm
+850c358c9180d19139e943ac09ad6f8309316af66ba01b861162a3bcaeaff859  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/key.mm
+766766bb436c65675910c3a9882cf7237c12d69b8a1aacdffa4cc18dddb01ded  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/d3dmetal-transport.mm
+3c4ff2b79a61583b54d7613d8fe085ecd19546ee3f8ad559c5d10d2a2caaf4bf  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/d3dmetal-transport-legacy.mm
+f9cbcdf0aa35e8f0654bbb12691bc4f9e3fce08ffda01cd6dd3a5a24288ff5af  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/d3dmetal-replay-hooks.mm
+968a3cbaaa62724a570899f9f61aee07015831d2f094339aeedc3b084dcc6369  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/fsr-contract.cpp
+a1f051ebd4664fd28629b7a8523fe275a12b5d3e291197d9c60cfae15b534a77  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/fsr-translator.mm
+2b117786519364ae1930181c8b2c5b046d12c8bccfa76ef18704847a138a9dc9  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/fsr-framegeneration.mm
+07a20e5072ca7ae017ec66f7f5189c1b9475efd0af8ad560b8047568d926f00b  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/persistent-cache.mm
+2afb0a2dd1a5fcc23fb9c4c5da1e9247e60615b4a887afd9a8e06dcf38bc90d6  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/rt-key.mm
+6784a99a5083e9d436475ba9607592fc0c7d42a5d846e92cdb74af16ebc3de89  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/stage-cache.mm
+781809bbdf11144f5dbf4ba5165725f00c78bcbe4a09693e912387798119f36e  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/bridge.mm
+b702c47dde0e206c6d8cd5edfb706f0f003438ddadf7f74347a656ef874ed31a  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/instrument-sr-timing.py
+757337c71f8a45b60ca29e8151609521249391bf763ae1f4a29cf3a897b2e8ba  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/run-d3dmetal-timing.sh

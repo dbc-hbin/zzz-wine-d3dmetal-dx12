@@ -6,7 +6,12 @@
  * 98b4052c999751d631d12cae834a8a41484f2447061893c9b44a6e63e36b8d1e).
  * The catalog is a historical local Wine menu snapshot: three existing
  * D3DMetal records intentionally omit attributes.id, as Yaagl records do.
+ * K_ below is the verbatim D3D12 storage lifecycle from the installed
+ * resources.neu dist/assets/index.2a92d5e0.js, separate from those
+ * Yaagl 0.3.18 launch sections.
  */
+
+const bl="config_use_d3d12";async function K_({locale:e,config:t,wine:n}){try{t.useD3D12=await we(bl)=="true"}catch{t.useD3D12=!1}const[r,u]=le(t.useD3D12);async function o(i){return ke(t.useD3D12),i?(t.useD3D12==r()||(t.useD3D12=r(),await he(bl,t.useD3D12?"true":"false")),pe):(u(t.useD3D12),pe)}return De(()=>{r(),o(!0)}),[function(){return E(Ue,{id:"d3d12",get children(){return E(Ee,{get children(){return E(bt,{get checked(){return r()},get disabled(){return n.attributes.supportsD3d12!==!0},onChange:()=>u(a=>!a),size:"md",get children(){return e.get("SETTING_D3D12")}})}})}})}]}
 
 async function Ht(e,t){return await $e(["mv","-f",`${Y(e)}`,`${Y(t)}`])}
 

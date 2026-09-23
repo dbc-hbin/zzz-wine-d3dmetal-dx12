@@ -1,0 +1,5 @@
+MTL_HUD_ENABLED=0 (explicit for control and timed runs)
+YAAGL_FSR_UPSCALER=metalfx; D3DM_MTL4=1; D3DM_ENABLE_METALFX=1; MTL_CAPTURE_ENABLED=0
+helper_sha256: 46ee65bfbc8bb618cf09cac509dc35a928faab8a5bdc6e1bb0127725ea3635e9  /tmp/yaagl-sr-d3dmetal-timing/runtime/wine/bin/yaagl-frame-probe-exec
+patched_D3DMetal_sha256: 68ed2758eb7227c56eefdb8312fdfe1d1a82ccb66e33cbebed074fab6ea378bc  /tmp/yaagl-sr-d3dmetal-timing/runtime/wine/lib/external/D3DMetal.framework/Versions/A/D3DMetal
+instrumented_sidecar_sha256: a1183a1edd11ad5b95d675ad6ab7e48466267a1547020079b0e7fe8f2eef1ea0  /tmp/yaagl-sr-d3dmetal-timing/runtime/wine/lib/external/D3DMetal.framework/Versions/A/Resources/libYaaglNativePsoCache.dylib

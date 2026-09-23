@@ -1,0 +1,7 @@
+msync: bootstrapped mach port on wine-54781f9-msync-v2.
+msync: up and running.
+00f8:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+2026-09-23 13:35:26.154 wine[17264:30585451] [libMTLHud] Metric com.apple.hud-label.metalfx.timing already exist
+available_provider id=0x4d46580000000001 name=MetalFX (FSR 4 API)
+BENCH mode=mfx provider_id=0x4d46580000000001 provider=MetalFX (FSR 4 API) module=C:\windows\system32\amd_fidelityfx_upscaler_dx12.dll dims=1128x624->1920x1080 mask=R8 flags=1 sharpen=on sharpness=0.5 warm=8 samples=24 api_ms_p50/p90=0.137/0.184 close_ms_p50/p90=0.001/0.001 execute_and_fence_wall_ms_p50/p90=4.692/5.849 fence_arm_cpu_ms_p50/p90=0.028/0.038 host_event_wait_ms_p50/p90=4.643/5.808 submit_to_fence_wall_ms_p50=4.693/5.851 dispatch_to_fence_wall_ms_p50/p90=4.901/6.005 output_mean=0.449455 result=PASS

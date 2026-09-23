@@ -19,6 +19,8 @@ v1.1.0 공개 런타임은 그래픽 어댑터를 **AMD Radeon RX 9070**(`0x1002
 
 같은 이름의 런타임도 재설치할 수 있습니다. 이름이 같다는 이유로 현재 파일이라고 간주하지 않고 동봉 아카이브로 캐시와 런타임 디렉터리를 모두 교체합니다. 마지막 Wine 선택 활성화에 실패하면 최초 복원 백업을 소비하지 않고 이번 시도 직전의 런타임과 선택 상태로 되돌립니다. 여기서 “업데이트”는 실행한 설치 프로그램에 포함된 빌드로 교체한다는 뜻이며 온라인 업데이트 확인 기능이 아닙니다.
 
+현재 설치기 소스에는 아직 기존 배포 ZIP에 포함되지 않은 DX12 마이그레이션이 있습니다. 구버전의 강제 DX12 실행 규칙이 확인되고, 같은 대상 D3DMetal 런타임이 선택돼 DX12를 지원하며, 저장된 DX12 설정이 없을 때만 ON을 저장해 v1.0.5의 실효 기본값을 보존합니다. 저장된 OFF는 덮어쓰지 않습니다. 새 런처와 이미 설정 기반인 런처는 기존 설정을 따르며, v1.1.x의 불명확한 설정 이력을 값만 보고 추측하지 않습니다.
+
 ### 터미널 설치
 
 대상 선택 메뉴는 **Yaagl ZZZ OS**, **Yaagl ZZZ OS DX12 Beta**(글로벌), **Yaagl ZZZ DX12 Beta**(중국)를 지원하며 [DX12 베타 릴리즈](https://github.com/dbc-hbin/yaagl-ZZZ-DX12/releases)에도 설치할 수 있습니다. 각 대상은 별도의 `~/Library/Application Support/<런처 이름>` 폴더를 사용하므로 베타에 설치해도 일반판의 Wine은 교체하지 않습니다. Yaagl을 처음 설치했다면 한 번 실행해 지원 폴더를 만든 뒤 종료하고 설치 프로그램을 사용하세요. 일반판이 설치돼 있으면 기본 선택하며, 없으면 설치된 베타를 감지합니다.
@@ -39,8 +41,9 @@ CLI에서는 글로벌 베타에 `--app-path "/Applications/Yaagl ZZZ OS DX12 Be
 
 ### FSR 업스케일링 → MetalFX
 
-- 실행 wrapper는 공개 그래픽 식별자를 AMD Radeon RX 9070(`0x1002:0x7550`)으로 고정합니다. NVIDIA 어댑터로 위장하지 않습니다.
+- 실행 wrapper는 공개 그래픽 식별자를 AMD Radeon RX 9070(`0x1002:0x7550`)으로 고정합니다. NVIDIA 어댑터로 위장하지 않습니다. FSR staging helper는 호출자의 `MTL_HUD_ENABLED` 값(미설정 또는 빈 값 포함)을 그대로 전달합니다. 새로 staging한 런타임을 진단할 때는 Metal HUD를 명시적으로 켜야 합니다.
 - builtin `amd_fidelityfx_upscaler_dx12` 모듈이 공개 FSR API 경계를 구현하고 허용된 temporal-upscaling 작업을 MetalFX로 번역합니다. AMD FSR4 신경망을 실행하지 않습니다.
+- 새로 staging한 런타임에서는 `YAAGL_FSR_UPSCALER=metalfx`(미설정·빈 값도 기본값)가 builtin 업스케일러를, `YAAGL_FSR_UPSCALER=native`가 게임의 원본 canonical 업스케일러 DLL을 선택합니다. native 선택 시 builtin으로 fallback하지 않습니다. 이 명시적 SR 비교 옵션은 실행 wrapper를 통과하며 프레임 생성 provider 정책은 바꾸지 않습니다. 다른 값은 Wine 실행 전에 오류로 종료합니다. 기존 배포 archive에는 다시 빌드하기 전까지 반영되지 않습니다.
 - Native AA와 Quality, Balanced, Performance, Ultra Performance 모드는 게임/provider가 명시적으로 선택합니다. 번역기가 임의로 품질 모드를 선택하지 않습니다. 요청이 MetalFX 최대 temporal 배율을 넘으면 MetalFX 출력을 하나의 균일 배율로 제한해 caller의 출력 텍스처 가운데에 배치하고 주변 texel은 보존합니다.
 - 명시적인 OFF 선택은 게임 설정을 그대로 따릅니다. 런타임이 업스케일링이나 프레임 생성을 자동으로 켜지 않습니다.
 - 모든 Mac에서 시스템 기본 MetalFX temporal 모델을 사용합니다. 하드웨어 이름 추정, BBR 강제 정책 또는 비공개 모델 버전 override는 없습니다.
@@ -89,6 +92,10 @@ CLI에서는 글로벌 베타에 `--app-path "/Applications/Yaagl ZZZ OS DX12 Be
 - 로그는 API, encode 또는 callback 진행을 나타냅니다. GPU 완료, 화질, FPS 또는 OFF 전환의 증거가 아닙니다.
 
 제거한 DLSS 전용 경로는 숨겨진 호환 옵션으로 남아 있지 않습니다. production bridge와 build inventory에는 NGX 진입 hook, NGX reprojection helper·smoke fixture, DLSS exposure 보정, temporal interception 또는 기존 frame-probe 구현·제어가 포함되지 않습니다. FSR에 필요한 공용 command-replay hook 두 개는 `d3dmetal-replay-hooks.{hpp,mm}`로 분리했습니다. layout v9는 PSO/cache hook 17개와 이 replay hook 두 개를 포함하며 DLSS 번역을 복구하지 않습니다.
+
+**미배포 소스:** layout v10은 GPU 완료 시 회수를 위한 Metal4 queue-commit hook을 추가합니다. dispatch table은 20개 항목(PSO/cache 17개, replay 2개, commit 1개)이며 대응하는 D3DMetal patch와 native sidecar를 함께 다시 빌드해야 합니다. 기존 배포 archive는 변경하지 않았습니다.
+
+현재 소스는 완료된 execution lease를 allocator Reset 전에 회수하되, 미제출 작업이나 callback 등록 실패에서는 owner의 안전한 보유를 유지합니다. SR은 더 작은 active input에서 호환되는 scaler capacity를 재사용하며 history reset과 동기화된 edge staging을 수행합니다. [메모리 측정 결과와 한계](docs/screenshot-sr-analysis-2026-09-23.ko.md)는 bounded reuse와 즉시 물리 메모리 반환, 아직 검증하지 않은 게임 전체 메모리 차이를 구분합니다.
 
 ### 검증 상태
 

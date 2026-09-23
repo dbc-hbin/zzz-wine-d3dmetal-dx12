@@ -1,0 +1,64 @@
+[
+  {
+    "suite": "lifetime",
+    "build_exit": 0,
+    "sources": {
+      "d3dmetal-pso-cache/d3dmetal-transport-legacy.hpp": "0fe3044802c025a4d865e7ff205e008f1f294cf4034889ec19b70174d530d7ef",
+      "d3dmetal-pso-cache/d3dmetal-transport-legacy.mm": "3c4ff2b79a61583b54d7613d8fe085ecd19546ee3f8ad559c5d10d2a2caaf4bf",
+      "d3dmetal-pso-cache/d3dmetal-transport-lifetime.test.mm": "b97aa3d80e5b34090542c40a49625a221791686b4bc031701fbde1b7c6b9e721",
+      "d3dmetal-pso-cache/d3dmetal-transport.hpp": "3256d1a0b5ecd6b6634de7fcdfc6f8377d05890d42cfec5cfc42f65f5ac19a67",
+      "d3dmetal-pso-cache/d3dmetal-transport.mm": "766766bb436c65675910c3a9882cf7237c12d69b8a1aacdffa4cc18dddb01ded",
+      "d3dmetal-pso-cache/fsr-framegeneration.hpp": "40c1352fecd8b3a52b4981728fcbff7cf57f5eacc0c486d0ccfacbf9818500b2",
+      "d3dmetal-pso-cache/fsr-framegeneration.mm": "2b117786519364ae1930181c8b2c5b046d12c8bccfa76ef18704847a138a9dc9",
+      "d3dmetal-pso-cache/fsr-kernels.metal": "6efcd832f03ff128f4e89e2b6e2382aadb342cf04e3c1bb1b693e2b29207f968",
+      "d3dmetal-pso-cache/metalfx-backend.hpp": "a4a4bbf26641842d13c860cba1afc6fb7a6ff72a90a7ec23ddd48e24bff5da85",
+      "d3dmetal-pso-cache/metalfx-backend.mm": "e635df237771dbd9d8e869735b8a1951f0f9e0295248114af682d5a7d780369d",
+      "d3dmetal-pso-cache/metalfx-contract.hpp": "837c3274e93e69c133d9a3e4517b87a61640cd19ee2fb344036b07c0362f77ed"
+    },
+    "sources_unchanged_during_build": true,
+    "build_log": "/private/tmp/yaagl-transport-lifetime-postlegacyfix/run-20260923T081702041190Z/lifetime-build.log",
+    "build_command": [
+      "xcrun",
+      "clang++",
+      "-arch",
+      "x86_64",
+      "-std=c++20",
+      "-O2",
+      "-mmacosx-version-min=14.0",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-pthread",
+      "-fno-objc-arc",
+      "-fobjc-exceptions",
+      "-fblocks",
+      "-I",
+      "/private/tmp/yaagl-transport-lifetime-postlegacyfix/run-20260923T081702041190Z",
+      "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/metalfx-backend.mm",
+      "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/d3dmetal-transport-legacy.mm",
+      "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/fsr-framegeneration.mm",
+      "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/d3dmetal-transport-lifetime.test.mm",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "Metal",
+      "-framework",
+      "MetalFX",
+      "-o",
+      "/private/tmp/yaagl-transport-lifetime-postlegacyfix/run-20260923T081702041190Z/lifetime"
+    ],
+    "passed": true,
+    "run_command": [
+      "/usr/bin/arch",
+      "-x86_64",
+      "/private/tmp/yaagl-transport-lifetime-postlegacyfix/run-20260923T081702041190Z/lifetime"
+    ],
+    "run_exit": 0,
+    "run_log": "/private/tmp/yaagl-transport-lifetime-postlegacyfix/run-20260923T081702041190Z/lifetime.log",
+    "duration_seconds": 0.595,
+    "executable_sha256": "403aa117d853f0b5530dd1769518487eb08ea2d6d34fc0a879c3fdd5e02cb29e",
+    "result_lines": [
+      "TRANSPORT_LIFETIME_PASS"
+    ]
+  }
+]

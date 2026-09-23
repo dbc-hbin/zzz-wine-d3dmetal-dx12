@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "source": "d3dmetal-pso-cache/fsr-translator.d3d12.test.cpp",
+  "source_sha256": "17535baabd77192f262ffd726aac4fc1568152bd1f11b7724c1f050414a24e8f",
+  "compiler": "/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++",
+  "build_command": [
+    "/opt/llvm-mingw-20260616-ucrt-macos-universal/bin/x86_64-w64-mingw32-clang++",
+    "-std=c++20",
+    "-O2",
+    "-static",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-Wno-switch",
+    "-I",
+    "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache",
+    "/Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/d3dmetal-pso-cache/fsr-translator.d3d12.test.cpp",
+    "-ld3d12",
+    "-ld3dcompiler",
+    "-ldxgi",
+    "-lole32",
+    "-luser32",
+    "-o",
+    "/private/tmp/yaagl-lease-production-20260923/postfix-legacy-sr/run-1790151036032497000/fsr-translator.exe"
+  ],
+  "build_exit": 0,
+  "build_log": "/private/tmp/yaagl-lease-production-20260923/postfix-legacy-sr/run-1790151036032497000/build.log",
+  "runtime": "/private/tmp/yaagl-lease-production-20260923/wine",
+  "requested_command_buffer": "legacy",
+  "executable_sha256": "9606919192a1f497d1769edfaaeea4efa4ba808ebeadde8098fecd1bde430870",
+  "run_command": [
+    "/private/tmp/yaagl-lease-production-20260923/wine/bin/yaagl-frame-probe-exec",
+    "/private/tmp/yaagl-lease-production-20260923/wine/bin/wine.real",
+    "/private/tmp/yaagl-lease-production-20260923/postfix-legacy-sr/run-1790151036032497000/fsr-translator.exe"
+  ],
+  "run_exit": 0,
+  "duration_seconds": 10.916,
+  "run_log": "/private/tmp/yaagl-lease-production-20260923/postfix-legacy-sr/run-1790151036032497000/run.log",
+  "translator_log": "/private/tmp/yaagl-lease-production-20260923/postfix-legacy-sr/run-1790151036032497000/fsr.jsonl",
+  "passed": true,
+  "mode_behavior_passed": true,
+  "result_lines": [
+    "FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1"
+  ]
+}

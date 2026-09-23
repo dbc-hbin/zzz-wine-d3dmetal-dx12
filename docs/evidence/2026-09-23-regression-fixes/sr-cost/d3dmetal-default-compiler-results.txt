@@ -1,0 +1,29 @@
+Same-D3DMetal public-default-compiler configuration probe
+
+Run: isolated D3DMetal/Wine clone at `/tmp/yaagl-sr-d3dmetal-default-compiler/runtime/wine`; `RUN_CONTROL=0`, `DEFAULT_COMPILER=1`, `CONFIG_PROBE=1`, `MTL_HUD_ENABLED=0`, same FFX screenshot workload (1128x624→1920x1080, R8 reactive, auto exposure, sharpening off, 8 warm + 24 measured). No installed runtime/game was changed. The temporary backend created a public empty-descriptor `MTL4Compiler` on the borrowed MPL device, verified the device matches, and replaced only the retained feature compiler. Command buffers, MTL4 device, original resources, and production fence ordering remained intact. No control was rerun.
+
+Outcome: benchmark `PASS`, `output_mean=0.449135`; counter timestamps and commit feedback were valid on all 32 rows. Measured-only rows 8..31 (n=24), p50/p90:
+- MetalFX scaler GPU interval: 2.2108/2.4505 ms
+- whole SR backend GPU span: 2.2938/2.5347 ms
+- backend pre/post GPU: 0.0033/0.0035 ms and 0.0798/0.0810 ms
+- replay host wall: 0.1408/0.1679 ms (not thread CPU time)
+- commit-entry→feedback wall: 2.7375/2.9764 ms (includes GPU wait)
+- MTL4 feedback GPU interval: 1.6305/1.8941 ms
+
+The feedback GPU interval materially differs from the timestamped SR span in this run; retain both raw measurements and do not use feedback as an identity cross-check here. This differs from the earlier borrowed-compiler run, whose medians were close.
+
+Runtime config trace:
+- device: Apple M5 Pro, registry ID 4294968672; device class `AGXG17SDevice`
+- original borrowed and selected public-default compiler: class `AGXG17XFamilyCompiler`, same device, nil label and nil pipeline-data-set serializer
+- scaler: `_M4FXTemporalScalingEffectBBR`, same class as the standalone run
+- MetalFX dynamic scale range 1..3; input capacity/active content 1128x624; descriptor/effective output 1920x1080, no actual cap, placement 0,0
+- create flags 0x42: low-resolution motion vectors and auto exposure; reactive mask enabled as R8Unorm; output-subrect support false; Linear, sharpening off, no composition combination
+- FFX jitter 0.1875/0.12962961; motion scale 1128/624; pre-exposure 1; reset on first frame
+- D3DMetal-mapped color/depth/motion/reactive textures: RGBA16Float/R32Float/RG16Float/R8Unorm, each Shared storage, size 1128x624, usage 0x11. Output RGBA16Float is Shared, size 1920x1080, usage 0x17. No input staging; output shadow required. MetalFX-bound effective output is Private usage 0x7.
+
+Comparison with the aligned standalone probe:
+- same device ID, same actual scaler class, same compiler class/public metadata, formats, descriptor dimensions, cap policy (cap requested but not needed), temporal flags, active input content, jitter, and output pixels
+- standalone input textures are Shared usage 0x3; standalone caller output is Private usage 0x3. D3DMetal caller inputs are Shared usage 0x11 and output Shared usage 0x17. Both paths report no input staging and use the same Private usage-0x7 MetalFX output shadow.
+- aligned standalone scaler p50/p90 is 1.0704/1.0855 ms; this D3D public-default run is 2.2108/2.4505 ms (about 2.07x at p50).
+
+The older borrowed-compiler run measured 3.0678 ms p50, but was not a fresh same-instrumentation control. The current public-default result cannot establish a compiler effect: no fresh borrowed-compiler control was run before handing the GPU to the lifetimes agent. The concrete caller texture usage/storage differences above remain a possible untested factor; no production optimization or codegen conclusion is justified. The aligned standalone log also emitted an Apple Neural Engine `doCompileModel` bad-argument error during scaler setup, despite 32 valid timing rows and output validation PASS; its effect, if any, is unknown. See `d3dmetal-default-compiler.stdout`, `d3dmetal-default-compiler-build-inputs.txt`, `native-aligned-jitter-cap.stdout`, and `native-aligned-build-inputs.txt` for raw output and hashes.

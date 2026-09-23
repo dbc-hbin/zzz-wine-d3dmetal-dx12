@@ -1,0 +1,64 @@
+wine: created the configuration directory '/tmp/yaagl-sr-d3dmetal-timing/metalfx-timed-prefix'
+msync: bootstrapped mach port on wine-549f7ed-msync-v2.
+msync: up and running.
+002c:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0060:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0060:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0060:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0060:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+0060:err:ole:start_rpcss Failed to open RpcSs service
+0058:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0058:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0058:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\winebth.sys,-1" -> L"C:\\windows\\inf\\winebth.inf"
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\wineusb.sys,-1" -> L"C:\\windows\\inf\\wineusb.inf"
+00b8:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00b8:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00e4:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+0164:fixme:msg:pack_message msg 14 (WM_ERASEBKGND) not supported yet
+002c:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+YAAGL_TIMING index=0 replay_cpu_ms=0.8303 commit_to_feedback_host_ms=8.2980 backend_pre_gpu_ms=0.0103 metalfx_gpu_ms=4.0816 backend_post_gpu_ms=0.1565 sr_gpu_ms=4.2483 feedback_gpu_ms=4.0401 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=1 replay_cpu_ms=0.4892 commit_to_feedback_host_ms=4.8607 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.0255 backend_post_gpu_ms=0.1568 sr_gpu_ms=4.1899 feedback_gpu_ms=4.1946 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=2 replay_cpu_ms=0.5118 commit_to_feedback_host_ms=4.9427 backend_pre_gpu_ms=0.0072 metalfx_gpu_ms=4.0531 backend_post_gpu_ms=0.1578 sr_gpu_ms=4.2182 feedback_gpu_ms=4.2232 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=3 replay_cpu_ms=0.3757 commit_to_feedback_host_ms=4.8969 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.0809 backend_post_gpu_ms=0.1591 sr_gpu_ms=4.2476 feedback_gpu_ms=4.2427 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=4 replay_cpu_ms=0.3583 commit_to_feedback_host_ms=4.9321 backend_pre_gpu_ms=0.0072 metalfx_gpu_ms=4.1090 backend_post_gpu_ms=0.1105 sr_gpu_ms=4.2266 feedback_gpu_ms=4.2304 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=5 replay_cpu_ms=0.3823 commit_to_feedback_host_ms=5.1731 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.3089 backend_post_gpu_ms=0.1601 sr_gpu_ms=4.4766 feedback_gpu_ms=4.2866 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=6 replay_cpu_ms=0.4584 commit_to_feedback_host_ms=4.0217 backend_pre_gpu_ms=0.0071 metalfx_gpu_ms=3.1630 backend_post_gpu_ms=0.1620 sr_gpu_ms=3.3321 feedback_gpu_ms=3.3351 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=7 replay_cpu_ms=0.4639 commit_to_feedback_host_ms=4.6526 backend_pre_gpu_ms=0.0075 metalfx_gpu_ms=3.8653 backend_post_gpu_ms=0.1107 sr_gpu_ms=3.9835 feedback_gpu_ms=3.9869 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=8 replay_cpu_ms=0.4647 commit_to_feedback_host_ms=5.4947 backend_pre_gpu_ms=0.0056 metalfx_gpu_ms=4.6551 backend_post_gpu_ms=0.1615 sr_gpu_ms=4.8223 feedback_gpu_ms=4.2043 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=9 replay_cpu_ms=0.4207 commit_to_feedback_host_ms=4.0346 backend_pre_gpu_ms=0.0054 metalfx_gpu_ms=3.1390 backend_post_gpu_ms=0.1601 sr_gpu_ms=3.3045 feedback_gpu_ms=3.3051 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=10 replay_cpu_ms=0.3798 commit_to_feedback_host_ms=4.3107 backend_pre_gpu_ms=0.0075 metalfx_gpu_ms=3.5320 backend_post_gpu_ms=0.1123 sr_gpu_ms=3.6517 feedback_gpu_ms=3.5932 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=11 replay_cpu_ms=0.4318 commit_to_feedback_host_ms=4.6723 backend_pre_gpu_ms=0.0055 metalfx_gpu_ms=3.8085 backend_post_gpu_ms=0.1599 sr_gpu_ms=3.9740 feedback_gpu_ms=3.9331 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=12 replay_cpu_ms=0.4061 commit_to_feedback_host_ms=3.6691 backend_pre_gpu_ms=0.0052 metalfx_gpu_ms=2.8505 backend_post_gpu_ms=0.1114 sr_gpu_ms=2.9671 feedback_gpu_ms=2.9681 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=13 replay_cpu_ms=0.4942 commit_to_feedback_host_ms=4.4651 backend_pre_gpu_ms=0.0073 metalfx_gpu_ms=3.6572 backend_post_gpu_ms=0.1118 sr_gpu_ms=3.7763 feedback_gpu_ms=3.7781 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=14 replay_cpu_ms=0.5243 commit_to_feedback_host_ms=4.2981 backend_pre_gpu_ms=0.0276 metalfx_gpu_ms=3.3593 backend_post_gpu_ms=0.1613 sr_gpu_ms=3.5482 feedback_gpu_ms=3.5298 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=15 replay_cpu_ms=0.3992 commit_to_feedback_host_ms=3.7212 backend_pre_gpu_ms=0.0075 metalfx_gpu_ms=2.8840 backend_post_gpu_ms=0.1114 sr_gpu_ms=3.0028 feedback_gpu_ms=3.0057 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=16 replay_cpu_ms=0.3783 commit_to_feedback_host_ms=4.4599 backend_pre_gpu_ms=0.0055 metalfx_gpu_ms=3.6762 backend_post_gpu_ms=0.1217 sr_gpu_ms=3.8034 feedback_gpu_ms=3.7807 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=17 replay_cpu_ms=0.3990 commit_to_feedback_host_ms=3.6720 backend_pre_gpu_ms=0.0051 metalfx_gpu_ms=2.8170 backend_post_gpu_ms=0.1117 sr_gpu_ms=2.9337 feedback_gpu_ms=2.9341 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=18 replay_cpu_ms=0.3528 commit_to_feedback_host_ms=4.2723 backend_pre_gpu_ms=0.0069 metalfx_gpu_ms=3.5155 backend_post_gpu_ms=0.1109 sr_gpu_ms=3.6332 feedback_gpu_ms=3.5768 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=19 replay_cpu_ms=0.4768 commit_to_feedback_host_ms=3.9184 backend_pre_gpu_ms=0.0054 metalfx_gpu_ms=3.0671 backend_post_gpu_ms=0.1208 sr_gpu_ms=3.1933 feedback_gpu_ms=3.1939 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=20 replay_cpu_ms=0.3470 commit_to_feedback_host_ms=3.7123 backend_pre_gpu_ms=0.0072 metalfx_gpu_ms=2.8951 backend_post_gpu_ms=0.1112 sr_gpu_ms=3.0135 feedback_gpu_ms=3.0163 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=21 replay_cpu_ms=0.3762 commit_to_feedback_host_ms=4.0656 backend_pre_gpu_ms=0.0055 metalfx_gpu_ms=3.2232 backend_post_gpu_ms=0.1602 sr_gpu_ms=3.3890 feedback_gpu_ms=3.3645 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=22 replay_cpu_ms=0.4863 commit_to_feedback_host_ms=3.7281 backend_pre_gpu_ms=0.0057 metalfx_gpu_ms=2.9196 backend_post_gpu_ms=0.1123 sr_gpu_ms=3.0376 feedback_gpu_ms=3.0058 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=23 replay_cpu_ms=0.4037 commit_to_feedback_host_ms=4.2290 backend_pre_gpu_ms=0.0054 metalfx_gpu_ms=3.4096 backend_post_gpu_ms=0.1117 sr_gpu_ms=3.5267 feedback_gpu_ms=3.4857 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=24 replay_cpu_ms=0.4514 commit_to_feedback_host_ms=3.6513 backend_pre_gpu_ms=0.0052 metalfx_gpu_ms=2.8453 backend_post_gpu_ms=0.1117 sr_gpu_ms=2.9622 feedback_gpu_ms=2.9634 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=25 replay_cpu_ms=0.4259 commit_to_feedback_host_ms=4.0265 backend_pre_gpu_ms=0.0068 metalfx_gpu_ms=3.2484 backend_post_gpu_ms=0.1115 sr_gpu_ms=3.3668 feedback_gpu_ms=3.3305 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=26 replay_cpu_ms=0.4338 commit_to_feedback_host_ms=3.8904 backend_pre_gpu_ms=0.0052 metalfx_gpu_ms=3.0684 backend_post_gpu_ms=0.1117 sr_gpu_ms=3.1852 feedback_gpu_ms=3.1858 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=27 replay_cpu_ms=0.3867 commit_to_feedback_host_ms=3.7090 backend_pre_gpu_ms=0.0053 metalfx_gpu_ms=2.8620 backend_post_gpu_ms=0.1116 sr_gpu_ms=2.9789 feedback_gpu_ms=2.9796 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=28 replay_cpu_ms=0.5388 commit_to_feedback_host_ms=3.6408 backend_pre_gpu_ms=0.0052 metalfx_gpu_ms=2.8533 backend_post_gpu_ms=0.1119 sr_gpu_ms=2.9703 feedback_gpu_ms=2.9710 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=29 replay_cpu_ms=0.3625 commit_to_feedback_host_ms=3.6615 backend_pre_gpu_ms=0.0055 metalfx_gpu_ms=2.8907 backend_post_gpu_ms=0.1119 sr_gpu_ms=3.0081 feedback_gpu_ms=2.9531 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=30 replay_cpu_ms=0.3438 commit_to_feedback_host_ms=3.6239 backend_pre_gpu_ms=0.0055 metalfx_gpu_ms=2.8212 backend_post_gpu_ms=0.1122 sr_gpu_ms=2.9389 feedback_gpu_ms=2.8813 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=31 replay_cpu_ms=0.4450 commit_to_feedback_host_ms=3.6570 backend_pre_gpu_ms=0.0053 metalfx_gpu_ms=2.8490 backend_post_gpu_ms=0.1117 sr_gpu_ms=2.9660 feedback_gpu_ms=2.9667 counter_valid=1 feedback_valid=1 result=PASS
+available_provider id=0x4d46580000000001 name=MetalFX (FSR 4 API)
+BENCH mode=mfx provider_id=0x4d46580000000001 provider=MetalFX (FSR 4 API) module=Z:\tmp\yaagl-sr-d3dmetal-timing\metalfx-workload\amd_fidelityfx_upscaler_dx12.dll dims=1128x624->1920x1080 mask=R8 create_flags=32 dispatch_flags=0 sharpen=off sharpness=0.5 warm=8 samples=24 api_ms_p50/p90=0.112/0.132 close_ms_p50/p90=0.001/0.001 execute_and_fence_wall_ms_p50/p90=4.507/5.137 fence_arm_cpu_ms_p50/p90=0.017/0.022 host_event_wait_ms_p50/p90=4.469/5.107 submit_to_fence_wall_ms_p50/p90=4.508/5.138 dispatch_to_fence_wall_ms_p50/p90=4.627/5.234 output_mean=0.449135 result=PASS

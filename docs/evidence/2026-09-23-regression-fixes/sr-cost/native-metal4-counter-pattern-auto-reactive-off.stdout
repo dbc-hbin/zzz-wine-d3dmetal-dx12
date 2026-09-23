@@ -1,0 +1,46 @@
+device baseline          metal=    0.06 MiB footprint=    5.27 MiB rss=    6.03 MiB
+compiler baseline        metal=    0.06 MiB footprint=    5.29 MiB rss=    6.06 MiB
+GPU_FREQ=24000000
+caller textures          metal=   28.77 MiB footprint=   29.28 MiB rss=   29.81 MiB
+2026-09-23 14:50:38.379 yaagl-sr-timing-probe.valid[16990:30783108] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+GPU_PROBE frame=0 pre_ms=0.0074 scaler_ms=4.2693 finish_ms=0.2834 total_ms=4.5601 commit_wall_ms=8.8243 feedback_gpu_start=454939.715739375 feedback_gpu_end=454939.719930416
+GPU_PROBE frame=1 pre_ms=0.0401 scaler_ms=3.3458 finish_ms=0.0976 total_ms=3.4835 commit_wall_ms=4.0987 feedback_gpu_start=454939.722117000 feedback_gpu_end=454939.725086208
+GPU_PROBE frame=2 pre_ms=0.0054 scaler_ms=1.7820 finish_ms=0.0730 total_ms=1.8604 commit_wall_ms=2.5317 feedback_gpu_start=454939.726498458 feedback_gpu_end=454939.728362166
+GPU_PROBE frame=3 pre_ms=0.0027 scaler_ms=1.4460 finish_ms=0.0696 total_ms=1.5184 commit_wall_ms=2.2135 feedback_gpu_start=454939.729738958 feedback_gpu_end=454939.731255291
+GPU_PROBE frame=4 pre_ms=0.0077 scaler_ms=1.2228 finish_ms=0.0648 total_ms=1.2953 commit_wall_ms=1.9532 feedback_gpu_start=454939.732420708 feedback_gpu_end=454939.733718708
+GPU_PROBE frame=5 pre_ms=0.0073 scaler_ms=1.1597 finish_ms=0.0554 total_ms=1.2224 commit_wall_ms=1.9187 feedback_gpu_start=454939.735031416 feedback_gpu_end=454939.736249125
+GPU_PROBE frame=6 pre_ms=0.0024 scaler_ms=1.1344 finish_ms=0.0540 total_ms=1.1907 commit_wall_ms=1.8745 feedback_gpu_start=454939.737620000 feedback_gpu_end=454939.738806750
+GPU_PROBE frame=7 pre_ms=0.0020 scaler_ms=1.1412 finish_ms=0.0625 total_ms=1.2057 commit_wall_ms=1.8930 feedback_gpu_start=454939.740204833 feedback_gpu_end=454939.741408416
+warm 8 drained           metal=  242.77 MiB footprint=  321.67 MiB rss=   41.17 MiB
+GPU_PROBE frame=8 pre_ms=0.0021 scaler_ms=1.0256 finish_ms=0.0577 total_ms=1.0854 commit_wall_ms=1.7247 feedback_gpu_start=454939.742793833 feedback_gpu_end=454939.743875125
+GPU_PROBE frame=9 pre_ms=0.0020 scaler_ms=1.1453 finish_ms=0.0609 total_ms=1.2082 commit_wall_ms=1.8479 feedback_gpu_start=454939.745029416 feedback_gpu_end=454939.746235541
+GPU_PROBE frame=10 pre_ms=0.0021 scaler_ms=1.1289 finish_ms=0.0582 total_ms=1.1892 commit_wall_ms=1.8378 feedback_gpu_start=454939.747492833 feedback_gpu_end=454939.748679375
+GPU_PROBE frame=11 pre_ms=0.0021 scaler_ms=1.1167 finish_ms=0.0565 total_ms=1.1753 commit_wall_ms=1.8003 feedback_gpu_start=454939.749928083 feedback_gpu_end=454939.751101041
+GPU_PROBE frame=12 pre_ms=0.0024 scaler_ms=1.1119 finish_ms=0.0556 total_ms=1.1698 commit_wall_ms=1.8104 feedback_gpu_start=454939.752253666 feedback_gpu_end=454939.753420666
+GPU_PROBE frame=13 pre_ms=0.0020 scaler_ms=1.1258 finish_ms=0.0630 total_ms=1.1907 commit_wall_ms=1.7788 feedback_gpu_start=454939.754530291 feedback_gpu_end=454939.755718166
+GPU_PROBE frame=14 pre_ms=0.0022 scaler_ms=1.1282 finish_ms=0.0596 total_ms=1.1900 commit_wall_ms=1.8725 feedback_gpu_start=454939.757034791 feedback_gpu_end=454939.758220791
+GPU_PROBE frame=15 pre_ms=0.0022 scaler_ms=1.1088 finish_ms=0.0578 total_ms=1.1688 commit_wall_ms=1.8373 feedback_gpu_start=454939.759432250 feedback_gpu_end=454939.760598541
+GPU_PROBE frame=16 pre_ms=0.0022 scaler_ms=1.1246 finish_ms=0.0585 total_ms=1.1853 commit_wall_ms=1.8111 feedback_gpu_start=454939.761904125 feedback_gpu_end=454939.763087000
+GPU_PROBE frame=17 pre_ms=0.0023 scaler_ms=1.1353 finish_ms=0.0586 total_ms=1.1962 commit_wall_ms=1.8829 feedback_gpu_start=454939.764280083 feedback_gpu_end=454939.765474000
+GPU_PROBE frame=18 pre_ms=0.0022 scaler_ms=1.1400 finish_ms=0.0605 total_ms=1.2027 commit_wall_ms=1.8681 feedback_gpu_start=454939.766657666 feedback_gpu_end=454939.767857458
+GPU_PROBE frame=19 pre_ms=0.0021 scaler_ms=1.1572 finish_ms=0.0622 total_ms=1.2215 commit_wall_ms=1.8534 feedback_gpu_start=454939.769024583 feedback_gpu_end=454939.770243708
+GPU_PROBE frame=20 pre_ms=0.0022 scaler_ms=1.1132 finish_ms=0.0590 total_ms=1.1745 commit_wall_ms=1.8081 feedback_gpu_start=454939.771347166 feedback_gpu_end=454939.772517666
+GPU_PROBE frame=21 pre_ms=0.0020 scaler_ms=1.1535 finish_ms=0.0597 total_ms=1.2152 commit_wall_ms=1.8558 feedback_gpu_start=454939.773719416 feedback_gpu_end=454939.774932083
+GPU_PROBE frame=22 pre_ms=0.0023 scaler_ms=1.1353 finish_ms=0.0671 total_ms=1.2047 commit_wall_ms=1.8702 feedback_gpu_start=454939.776267541 feedback_gpu_end=454939.777469708
+GPU_PROBE frame=23 pre_ms=0.0020 scaler_ms=1.1055 finish_ms=0.0581 total_ms=1.1656 commit_wall_ms=1.9610 feedback_gpu_start=454939.778842166 feedback_gpu_end=454939.780003500
+GPU_PROBE frame=24 pre_ms=0.0021 scaler_ms=1.1080 finish_ms=0.0620 total_ms=1.1720 commit_wall_ms=1.8452 feedback_gpu_start=454939.781228041 feedback_gpu_end=454939.782397458
+GPU_PROBE frame=25 pre_ms=0.0022 scaler_ms=1.1465 finish_ms=0.0610 total_ms=1.2097 commit_wall_ms=1.8240 feedback_gpu_start=454939.783620250 feedback_gpu_end=454939.784827583
+GPU_PROBE frame=26 pre_ms=0.0023 scaler_ms=1.1273 finish_ms=0.0617 total_ms=1.1913 commit_wall_ms=1.8736 feedback_gpu_start=454939.786093125 feedback_gpu_end=454939.787281875
+GPU_PROBE frame=27 pre_ms=0.0022 scaler_ms=1.1124 finish_ms=0.0578 total_ms=1.1724 commit_wall_ms=1.8289 feedback_gpu_start=454939.788526833 feedback_gpu_end=454939.789696750
+GPU_PROBE frame=28 pre_ms=0.0021 scaler_ms=1.1277 finish_ms=0.0605 total_ms=1.1903 commit_wall_ms=1.8580 feedback_gpu_start=454939.790940833 feedback_gpu_end=454939.792128333
+GPU_PROBE frame=29 pre_ms=0.0022 scaler_ms=1.1409 finish_ms=0.0578 total_ms=1.2008 commit_wall_ms=1.8916 feedback_gpu_start=454939.793404750 feedback_gpu_end=454939.794603416
+GPU_PROBE frame=30 pre_ms=0.0022 scaler_ms=1.1473 finish_ms=0.0618 total_ms=1.2113 commit_wall_ms=1.9035 feedback_gpu_start=454939.795891958 feedback_gpu_end=454939.797100916
+GPU_PROBE frame=31 pre_ms=0.0022 scaler_ms=1.1277 finish_ms=0.0653 total_ms=1.1952 commit_wall_ms=1.8926 feedback_gpu_start=454939.798399875 feedback_gpu_end=454939.799590666
+steady 24 drained        metal=  242.77 MiB footprint=  321.69 MiB rss=   41.20 MiB
+OUTPUT_VALIDATION mean=0.449175 pixels=2073600 result=PASS
+feature reset/pool held  metal=  242.77 MiB footprint=  337.63 MiB rss=   57.09 MiB
+backend+textures gone/drained metal=  226.69 MiB footprint=  321.36 MiB rss=   57.07 MiB
+compiler released        metal=  226.69 MiB footprint=  321.36 MiB rss=   57.07 MiB

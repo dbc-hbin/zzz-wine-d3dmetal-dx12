@@ -37,7 +37,9 @@ FSR_ARTIFACT_PATHS = (
     'lib/wine/x86_64-unix/amd_fidelityfx_framegeneration_dx12.so', PRIVATE_FG_PATH)
 FSR_POLICY = {'implementation': 'builtin-fsr-api-to-metalfx-with-metalfx-frame-interpolation',
               'dll_override': FSR_OVERRIDE, 'native_fg_fallback': PRIVATE_FG_PATH,
-              'loader_override': False, 'metal_hud': '1', 'diagnostic_log_environment': 'YAAGL_FSR_LOG'}
+              'upscaler_selection_environment': 'YAAGL_FSR_UPSCALER',
+              'default_upscaler': 'metalfx',
+              'loader_override': False, 'diagnostic_log_environment': 'YAAGL_FSR_LOG'}
 ARTIFACT_PATHS = ('bin/wine', 'bin/wine.real', 'bin/' + HELPER_NAME,
     str(REL / 'D3DMetal'), str(REL / 'Resources/libYaaglNativePsoCache.dylib'),
     str(REL / 'Resources/libmetalirconverter.dylib'),
@@ -93,8 +95,11 @@ def original_fg_provenance(path: Path) -> dict:
 def helper_script() -> str:
     return '\n'.join([
         '#!/bin/sh', 'set -eu',
-        'export WINEDLLOVERRIDES=' + FSR_OVERRIDE,
-        'export MTL_HUD_ENABLED=1',
+        'case "${YAAGL_FSR_UPSCALER:-metalfx}" in',
+        '  metalfx) export WINEDLLOVERRIDES=' + FSR_OVERRIDE + ' ;;',
+        '  native) export WINEDLLOVERRIDES="amd_fidelityfx_upscaler_dx12=n;amd_fidelityfx_framegeneration_dx12=b" ;;',
+        '  *) echo "YAAGL_FSR_UPSCALER must be metalfx or native" >&2; exit 64 ;;',
+        'esac',
         'export MTL_CAPTURE_ENABLED=0',
         'runtime_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)',
         f'export YAAGL_FSR_FG_NATIVE_DLL="Z:$runtime_root/{PRIVATE_FG_PATH}"',

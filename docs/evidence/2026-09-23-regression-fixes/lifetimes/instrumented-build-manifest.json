@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x86_64",
+  "deploymentTarget": "14.0",
+  "testControls": false,
+  "sources": [
+    {
+      "path": "d3dmetal-pso-cache/cache.hpp",
+      "sha256": "45d81e4616db75becc2f81646e2f8a7b3431a2a72e1384a8739f149bf2317545"
+    },
+    {
+      "path": "d3dmetal-pso-cache/cache.mm",
+      "sha256": "4e60ab13f1c94e6bc21e795911bcc0356272f309220e7956d0bc22a63d97e69a"
+    },
+    {
+      "path": "d3dmetal-pso-cache/function-cache.hpp",
+      "sha256": "329c98715712ec18a4ba1845aad108f40ad1394ebfc5e9bd3b8658e85e1a248e"
+    },
+    {
+      "path": "d3dmetal-pso-cache/function-cache.mm",
+      "sha256": "5bf87bfbdb1cdc07e3f2b80ffc4d43e897f3fd018d5ed05aa2ee16787a3f52a7"
+    },
+    {
+      "path": "d3dmetal-pso-cache/function-hooks.hpp",
+      "sha256": "85e9f00550cd6616a74b417150ef2ea2663b81f14f179f81277ac74c1a322ee1"
+    },
+    {
+      "path": "d3dmetal-pso-cache/function-hooks.mm",
+      "sha256": "0c438e38a871ac3254836248afa0c35e0dabad5982afd611cdd2d27df666b3c4"
+    },
+    {
+      "path": "d3dmetal-pso-cache/key.hpp",
+      "sha256": "ea292d6db2d9a39cabc9919d3a7ead84a1f044c710d177eb9fbf317abe69a733"
+    },
+    {
+      "path": "d3dmetal-pso-cache/key.mm",
+      "sha256": "850c358c9180d19139e943ac09ad6f8309316af66ba01b861162a3bcaeaff859"
+    },
+    {
+      "path": "d3dmetal-pso-cache/metalfx-contract.hpp",
+      "sha256": "837c3274e93e69c133d9a3e4517b87a61640cd19ee2fb344036b07c0362f77ed"
+    },
+    {
+      "path": "d3dmetal-pso-cache/metalfx-backend.hpp",
+      "sha256": "a4a4bbf26641842d13c860cba1afc6fb7a6ff72a90a7ec23ddd48e24bff5da85"
+    },
+    {
+      "path": "d3dmetal-pso-cache/metalfx-backend.mm",
+      "sha256": "f41bfdaf2a338f47f0aa333eb850ea8eddf567da8c8bc0ac8bb2cb086bdbebdf"
+    },
+    {
+      "path": "d3dmetal-pso-cache/d3dmetal-transport.hpp",
+      "sha256": "57e41d83ee50c91eca0d77878f8721ee3db1855d5e1d8f516e0f69293a776c5d"
+    },
+    {
+      "path": "d3dmetal-pso-cache/d3dmetal-transport.mm",
+      "sha256": "c79f716c1a20e301e7beabc0e5ba2ab47f7832a1680d946780a4384dfa024fb2"
+    },
+    {
+      "path": "d3dmetal-pso-cache/d3dmetal-replay-hooks.hpp",
+      "sha256": "250dc36fc6278f4e7f095034ba65e88111dd10df20a42832c84966b261c93050"
+    },
+    {
+      "path": "d3dmetal-pso-cache/d3dmetal-replay-hooks.mm",
+      "sha256": "f9cbcdf0aa35e8f0654bbb12691bc4f9e3fce08ffda01cd6dd3a5a24288ff5af"
+    },
+    {
+      "path": "d3dmetal-pso-cache/d3dmetal-transport-legacy.hpp",
+      "sha256": "0fe3044802c025a4d865e7ff205e008f1f294cf4034889ec19b70174d530d7ef"
+    },
+    {
+      "path": "d3dmetal-pso-cache/d3dmetal-transport-legacy.mm",
+      "sha256": "46b5129a57e71cf4acfb9be4eb3091ea0466b5ce94c84df11e1eb13e235bfc96"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-contract.hpp",
+      "sha256": "9fda5ccb733a2e0a71a42a6fca53b81f7670f05b30d941a75e0876cbdf9ea155"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-contract.cpp",
+      "sha256": "968a3cbaaa62724a570899f9f61aee07015831d2f094339aeedc3b084dcc6369"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-translator.hpp",
+      "sha256": "7d37aa8adb8cb74aef6e81118f90cf28b2dbe6ca01f9a820f9db69bf1da8992d"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-translator.mm",
+      "sha256": "a1f051ebd4664fd28629b7a8523fe275a12b5d3e291197d9c60cfae15b534a77"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-framegeneration.hpp",
+      "sha256": "40c1352fecd8b3a52b4981728fcbff7cf57f5eacc0c486d0ccfacbf9818500b2"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-framegeneration.mm",
+      "sha256": "2b117786519364ae1930181c8b2c5b046d12c8bccfa76ef18704847a138a9dc9"
+    },
+    {
+      "path": "include/yaagl_fsr_fg_bridge.h",
+      "sha256": "09d1f4583edfb13bae64128b91a5d26986255e28b6b94a5962d37c0ecb5214c7"
+    },
+    {
+      "path": "d3dmetal-pso-cache/fsr-kernels.metal",
+      "sha256": "6efcd832f03ff128f4e89e2b6e2382aadb342cf04e3c1bb1b693e2b29207f968"
+    },
+    {
+      "path": "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/ffx_api.h",
+      "sha256": "6b23d642141cbbad01f22a9f2e44e0f9df51fbe00a7fd490b06d06ca7bd42967"
+    },
+    {
+      "path": "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/ffx_api_types.h",
+      "sha256": "68534c808a0b981b92b1381bc39d58e85ff3d47159c27afd6d0da3caefd0f5cb"
+    },
+    {
+      "path": "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/api/include/dx12/ffx_api_dx12.h",
+      "sha256": "6b0b377c43ebcb3c3b820008b3f05e5cf5e16f08ad41935eabcbe764970c6c88"
+    },
+    {
+      "path": "d3dmetal-pso-cache/third-party/fidelityfx/Kits/FidelityFX/upscalers/include/ffx_upscale.h",
+      "sha256": "5d0fed5deaf7e243136c70dac117d6b74c632a6f2d144fa6c3ea30c08b6c7523"
+    },
+    {
+      "path": "d3dmetal-pso-cache/persistent-cache.hpp",
+      "sha256": "71d09812416dfa9d97bb692ec4f3a4aa0bd40d88fa674c7a017a5bbde1637e07"
+    },
+    {
+      "path": "d3dmetal-pso-cache/persistent-cache.mm",
+      "sha256": "07a20e5072ca7ae017ec66f7f5189c1b9475efd0af8ad560b8047568d926f00b"
+    },
+    {
+      "path": "d3dmetal-pso-cache/rt-key.hpp",
+      "sha256": "c6e56c1c7a3343d69ad478eb1f98268c097c3f0345f3cb3a02785c9aff9dd2cf"
+    },
+    {
+      "path": "d3dmetal-pso-cache/rt-key.mm",
+      "sha256": "2afb0a2dd1a5fcc23fb9c4c5da1e9247e60615b4a887afd9a8e06dcf38bc90d6"
+    },
+    {
+      "path": "d3dmetal-pso-cache/stage-cache.hpp",
+      "sha256": "9d9dc0afa1f2741725e1e334d475afe379069ae914b27a6ddc4c1cdd820c13e3"
+    },
+    {
+      "path": "d3dmetal-pso-cache/stage-cache.mm",
+      "sha256": "6784a99a5083e9d436475ba9607592fc0c7d42a5d846e92cdb74af16ebc3de89"
+    },
+    {
+      "path": "d3dmetal-pso-cache/bridge.mm",
+      "sha256": "781809bbdf11144f5dbf4ba5165725f00c78bcbe4a09693e912387798119f36e"
+    },
+    {
+      "path": "d3dmetal-pso-cache/layout.json",
+      "sha256": "9683fca4551df706f10212a1b6a8e88ff9eeb304ff720a0c20ae5135d5b38f9c"
+    },
+    {
+      "path": "scripts/build-d3dmetal-pso-cache.mjs",
+      "sha256": "37ad34997c0736c19f78cfbe372af622796ebfe1045941e9cccd9fd0705ca705"
+    },
+    {
+      "path": "scripts/d3dmetal-pso-cache-patch.mjs",
+      "sha256": "feb886c9f24d537dd70a3b07cf4339a9a0daee5d3c886972285acd3758b2bcbd"
+    },
+    {
+      "path": "scripts/d3dmetal-stage-lock-patch.mjs",
+      "sha256": "4f8a2cbc8e4e9beffdff5b3e796ca0be2aaf671fbe93da8d23f4d7fc10537832"
+    }
+  ],
+  "compiler": {
+    "path": "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++",
+    "version": "Apple clang version 21.0.0 (clang-2100.3.30.1)\nTarget: arm64-apple-darwin27.0.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+    "sdkPath": "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk"
+  },
+  "compileArgs": [
+    "-arch",
+    "x86_64",
+    "-std=c++20",
+    "-fno-objc-arc",
+    "-fobjc-exceptions",
+    "-fblocks",
+    "-isysroot",
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk",
+    "-mmacosx-version-min=14.0",
+    "-O2",
+    "-Wall",
+    "-Wextra",
+    "-Werror",
+    "-dynamiclib",
+    "-pthread",
+    "-framework",
+    "Foundation",
+    "-framework",
+    "Metal",
+    "-framework",
+    "QuartzCore",
+    "-framework",
+    "MetalFX",
+    "-I",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache",
+    "-I",
+    "/tmp/yaagl-lease-callback-probe/instrumented-build",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/cache.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/function-cache.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/function-hooks.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/key.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/metalfx-backend.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/d3dmetal-transport.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/d3dmetal-transport-legacy.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/d3dmetal-replay-hooks.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/fsr-contract.cpp",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/fsr-translator.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/fsr-framegeneration.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/persistent-cache.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/rt-key.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/stage-cache.mm",
+    "/private/tmp/yaagl-lease-callback-probe/source/d3dmetal-pso-cache/bridge.mm",
+    "-Wl,-install_name,@rpath/libYaaglNativePsoCache.dylib",
+    "-o",
+    "/tmp/yaagl-lease-callback-probe/instrumented-build/libYaaglNativePsoCache.dylib"
+  ],
+  "module": {
+    "file": "libYaaglNativePsoCache.dylib",
+    "sha256": "6f330cb56ec3993e45659dcbeb808067fe76cc710ccd9bde408dd62701d2854f"
+  }
+}

@@ -1,0 +1,23 @@
+device baseline          metal=    0.06 MiB footprint=    5.08 MiB rss=    5.86 MiB
+compiler baseline        metal=    0.06 MiB footprint=    5.09 MiB rss=    5.89 MiB
+caller textures          metal=   27.98 MiB footprint=    5.42 MiB rss=    6.15 MiB
+2026-09-23 13:44:15.806 sr-memory-probe[31188:30616110] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+warm 8 drained           metal=  239.75 MiB footprint=  306.98 MiB rss=   17.53 MiB
+steady 64 drained        metal=  239.75 MiB footprint=  306.99 MiB rss=   17.56 MiB
+2026-09-23 13:44:16.053 sr-memory-probe[31188:30616097] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+SCALER_DESTROY input=1128x624 output=1920x1080\ninput resize drained     metal=  425.62 MiB footprint=  496.19 MiB rss=   22.32 MiB
+2026-09-23 13:44:16.105 sr-memory-probe[31188:30616109] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+SCALER_DESTROY input=1056x594 output=1920x1080\nreturn resize drained    metal=  601.12 MiB footprint=  674.84 MiB rss=   26.96 MiB
+steady 64 again          metal=  601.12 MiB footprint=  674.86 MiB rss=   27.00 MiB
+SCALER_DESTROY input=1128x624 output=1920x1080\nfeature reset/pool held  metal=  601.12 MiB footprint=  674.86 MiB rss=   27.00 MiB
+backend+textures gone/drained metal=  585.06 MiB footprint=  674.67 MiB rss=   26.99 MiB
+compiler released        metal=  585.06 MiB footprint=  674.67 MiB rss=   26.99 MiB

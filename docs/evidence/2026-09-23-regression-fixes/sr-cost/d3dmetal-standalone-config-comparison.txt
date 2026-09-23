@@ -1,0 +1,32 @@
+Standalone Metal4 probe vs FFX-to-MetalFX D3DMetal benchmark
+
+Runtime values below come from one aligned standalone run and one D3DMetal public-default-compiler run. The backing-metadata getters are being added to the next fresh borrowed-control trace; fields for that trace are explicitly marked pending. The performance gap remains unresolved; no production optimization is justified by these probes.
+
+Device, compiler and scaler
+- Both paths create `MTLFXTemporalScalerDescriptor` and call `newTemporalScalerWithDevice:compiler:` in Metal4 mode.
+- Both runtime runs used Apple M5 Pro, Metal device registry ID 4294968672, device class `AGXG17SDevice`.
+- Standalone uses `MTLCreateSystemDefaultDevice()` and an empty `MTL4CompilerDescriptor`; D3DMetal borrows the current MPLContext device/compiler (offsets +0x8 and +0x18). The D3D temporary variant also creates a public empty-descriptor compiler on that same actual device and uses it for the feature.
+- Runtime compiler class in both paths: `AGXG17XFamilyCompiler`; public label and `pipelineDataSetSerializer` are nil. In the default-compiler run, original borrowed and selected replacement had the same class/device/public metadata. The borrowed control needed to isolate compiler-object behavior is pending; neither the old 3.0678 ms run nor the new 2.2108 ms run alone proves compiler causality.
+- Actual scaler class in both runtime traces: `_M4FXTemporalScalingEffectBBR`. Do not generalize from this class name to another MetalFX version.
+
+Feature flags and descriptor geometry
+- Both runtime paths: feature flags 0x42 (low-resolution motion vectors + auto exposure), Automatic exposure, reactive mask enabled as R8Unorm, Linear color, sharpening off, composition-mask combine off, output-subrect support false.
+- Both: input capacity and active input 1128x624; output descriptor/effective output 1920x1080; device-supported min/max scales 1/3; output cap policy requested in the aligned standalone run and always true in FFX, but there was no actual cap because output scale 1.73x is below maxScale 3.0. Placement is 0,0.
+- Both runtime frame traces: jitter 0.1875/0.12962961, motion scale 1128/624, pre-exposure 1, reset on first frame. Reactive input is present in both; standalone source binds its checker R8 texture at slot 5.
+- Standalone aligned run: scaler p50/p90 1.0704/1.0855 ms, output validation PASS, mean 0.449134.
+- D3D public-default run: scaler p50/p90 2.2108/2.4505 ms, benchmark PASS, output mean 0.449135. This is about 2.07x at p50. Its MTL4 feedback GPU interval (1.6305 ms p50) differs materially from its counter-timestamped full SR span (2.2938 ms p50); keep those measures distinct.
+
+Caller textures and effective MetalFX resources
+- Formats and dimensions match: color RGBA16Float, depth R32Float, motion RG16Float, reactive R8Unorm, output RGBA16Float; input 1128x624, output 1920x1080.
+- Standalone caller inputs are Shared usage 0x3; output is Private usage 0x3. D3DMetal caller inputs are Shared usage 0x11; output is Shared usage 0x17.
+- Both report no input staging and require an output shadow. The effective MetalFX output in both is Private usage 0x7. MetalFX requires input usage 0x1 for color/depth/motion/reactive.
+- D3DMetal inputs thus carry PixelFormatView in addition to ShaderRead; standalone carries ShaderWrite in addition to ShaderRead. Caller output storage/usage also differs. These differences may matter even without staging and have not yet been causally measured.
+- Public backing details for D3DMetal (`buffer`, bytes-per-row/offset, `parentTexture`, `heap`, `allowGPUOptimizedContents`, hazard tracking, IOSurface) and corresponding direct texture facts are pending the next one-time trace. Match the observed backing only after that trace; do not infer that equal Shared storage means equivalent allocation/backing.
+
+Fence ordering
+- Both paths supply a fence to the scaler. Direct updates it after a producer compute encoder and retains a MTLStageBlit wait for its later `copyFromTexture` readback ordering. D3DMetal ends the native MPL compute encoder, encodes MetalFX, restores the consumer compute encoder and waits on the same fence before dispatch. The direct wait stage is intentionally not changed to Dispatch without a real compute consumer and a correctly ordered readback. Production fence ordering is untouched.
+
+Bounded follow-up plan
+1. After lifetimes production GPU validation, capture public backing metadata in a fresh borrowed-compiler D3D trace with the same timing/config instrumentation; use separate prefixes and do not rerun an unchanged baseline.
+2. Use that observed backing to prepare one matched-resource standalone variant (including backing only if the public metadata warrants it). Keep FFX jitter/cap and the valid Blit wait.
+3. The old borrowed run and public-default run were not a same-source, same-instrumentation A/B. Report them as separate observations; do not claim a compiler speedup until the fresh borrowed control supports it.

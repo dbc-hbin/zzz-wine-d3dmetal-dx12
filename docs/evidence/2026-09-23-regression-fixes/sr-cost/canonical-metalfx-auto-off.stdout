@@ -1,0 +1,4 @@
+00f4:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+available_provider id=0x4d46580000000001 name=MetalFX (FSR 4 API)
+BENCH mode=mfx provider_id=0x4d46580000000001 provider=MetalFX (FSR 4 API) module=C:\windows\system32\amd_fidelityfx_upscaler_dx12.dll dims=1128x624->1920x1080 mask=R8 create_flags=32 dispatch_flags=0 sharpen=off sharpness=0.5 warm=8 samples=24 api_ms_p50/p90=0.116/0.134 close_ms_p50/p90=0.001/0.001 execute_and_fence_wall_ms_p50/p90=3.631/4.742 fence_arm_cpu_ms_p50/p90=0.019/0.023 host_event_wait_ms_p50/p90=3.595/4.708 submit_to_fence_wall_ms_p50/p90=3.631/4.742 dispatch_to_fence_wall_ms_p50/p90=3.752/4.857 output_mean=0.449135 result=PASS

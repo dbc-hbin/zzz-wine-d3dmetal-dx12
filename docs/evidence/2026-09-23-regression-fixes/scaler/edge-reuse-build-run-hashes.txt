@@ -1,0 +1,23 @@
+Focused MetalFX edge-reuse verification
+
+Build command:
+xcrun clang++ -arch x86_64 -std=c++20 -O2 -mmacosx-version-min=14.0 -Wall -Wextra -Werror -pthread -fno-objc-arc -fobjc-exceptions -fblocks -I /private/tmp/sr-scaler-native-tests/run-20260923T070101234483Z d3dmetal-pso-cache/metalfx-backend.mm d3dmetal-pso-cache/metalfx-backend.native.test.mm -framework Foundation -framework Metal -framework MetalFX -o /tmp/sr-scaler-metal4-barrier/backend-edge-scoped
+
+Run command:
+MTL_DEBUG_LAYER=1 /usr/bin/arch -x86_64 /tmp/sr-scaler-metal4-barrier/backend-edge-scoped --edge-reuse-only
+Result: exit 0, METALFX_EDGE_REUSE_ONLY_PASS
+Full output: edge-reuse.log
+
+SHA-256:
+metalfx-backend.mm e635df237771dbd9d8e869735b8a1951f0f9e0295248114af682d5a7d780369d
+metalfx-backend.native.test.mm 9fa19b521affae883488b0d53d92d6dce9487c7a6aff64854316046e07518ca3
+backend-edge-scoped 58d6e17e59dbbd36571397a540addccfdfaa7c93507b923fbf6589f1412ed842
+edge-reuse.log 679ab38239baf80002d6bd8a3fe620e966cd10a3ed2cf5cbdf7df5684856555d
+
+Verified cases (Apple10/MacOS 27 host):
+- Legacy, low-resolution motion: encode completed; staged color/depth/motion matched the CPU edge-extension oracle exactly; poisoned inactive padding was bit-invariant; backend matched direct same-descriptor MetalFX bit-for-bit. Fresh-capacity native comparison: 58/16384 pixels, max byte delta 2, normalized mean 0.000004249.
+- Metal4, low-resolution motion: same exact edge, poison, and direct-native checks; same fresh-capacity measurement.
+- Metal4, display-resolution motion: staged color/depth matched CPU exactly (motion is not staged); poison invariance and same-descriptor parity were exact. Fresh-capacity measurement: 22/16384 pixels, max byte delta 1, normalized mean 0.000001556.
+- Metal4, sRGB preprocessing: poisoned-padding output remained bit-identical. Fresh-capacity measurement: 29/16384 pixels, max byte delta 3, normalized mean 0.000002334; this FSR path does not run the direct-native parity comparison.
+
+The focused run used MTL_DEBUG_LAYER=1. The Apple Neural Engine emitted Code 26 diagnostics in the log, but the process exited 0 and emitted the pass marker. No allocation-path changes were made after the prior memory probe.

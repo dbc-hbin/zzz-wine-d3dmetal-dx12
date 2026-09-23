@@ -1,0 +1,133 @@
+2026-09-23 16:01:03.558 backend[42902:31110694] Metal API Validation Enabled
+2026-09-23 16:01:04.854 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.198 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.228 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.263 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.457 backend[42902:31110716] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.495 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.520 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.552 backend[42902:31110717] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.581 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.606 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.629 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.659 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.687 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.713 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.739 backend[42902:31110717] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.768 backend[42902:31110717] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.796 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:05.820 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:06.816 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:07.160 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:11.195 backend[42902:31110717] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:13.100 backend[42902:31110753] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:14.102 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:14.915 backend[42902:31110717] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:14.942 backend[42902:31110717] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:01:14.967 backend[42902:31110754] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+LEGACY_SYSTEM_DEFAULT
+CASE_PASS mode=metal4 storage=shared hashes=3cab4a86b3b0808c,2ea8d9c02e1965d2,da415cd787d39283 captures=2
+CASE_PASS mode=metal4 storage=private hashes=3cab4a86b3b0808c,2ea8d9c02e1965d2,da415cd787d39283 captures=1
+FSR_OPERATIONS_PASS transfer=srgb+pq mask=max rcas=off+on exposure=preserved
+DISPLAY_RESOLUTION_MOTION_PASS input=64x64 motion=128x128 output=128x128 backing=140x140
+EDGE_STAGING_CPU_ORACLE_PASS color=exact depth=exact motion=exact
+EXTENT_POISON_COMPARE mode=metal4 motion=low color_transfer=none differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=metal4 motion=low color_transfer=none differing_pixels=58/16384 max_byte_delta=2 mean_byte_delta_levels=0.001083 mean_normalized_delta=0.000004249 hashes=766c9f9359d4ca63/c45223f7d5cccb58 color_direct=0 motion=127x127 acceptance=measurement_only
+NATIVE_CAPACITY_COMPARE mode=metal4 motion=low capacity=127x127 active=43x43 differing_pixels=58/16384 max_byte_delta=2 mean_byte_delta_levels=0.001083 mean_normalized_delta=0.000004249
+DIRECT_NATIVE_PARITY mode=metal4 motion=low retained_pixels=0 max_byte_delta=0 mean_byte_delta_levels=0.000000 fresh_pixels=0 fresh_max_byte_delta=0
+SAME_DESCRIPTOR_NATIVE_PARITY_PASS mode=metal4 motion=low retained=bit-exact fresh=bit-exact
+INPUT_EXTENT_REUSE_PASS mode=metal4 motion=low color_transfer=none extents=127x127->43x43 backend_captures=2 padding=poisoned
+EDGE_STAGING_CPU_ORACLE_PASS color=exact depth=exact motion=not-staged
+EXTENT_POISON_COMPARE mode=metal4 motion=display color_transfer=none differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=metal4 motion=display color_transfer=none differing_pixels=22/16384 max_byte_delta=1 mean_byte_delta_levels=0.000397 mean_normalized_delta=0.000001556 hashes=a87fa4225fd8c58b/e8bd25659a64000d color_direct=0 motion=128x128 acceptance=measurement_only
+NATIVE_CAPACITY_COMPARE mode=metal4 motion=display capacity=127x127 active=43x43 differing_pixels=22/16384 max_byte_delta=1 mean_byte_delta_levels=0.000397 mean_normalized_delta=0.000001556
+DIRECT_NATIVE_PARITY mode=metal4 motion=display retained_pixels=0 max_byte_delta=0 mean_byte_delta_levels=0.000000 fresh_pixels=0 fresh_max_byte_delta=0
+SAME_DESCRIPTOR_NATIVE_PARITY_PASS mode=metal4 motion=display retained=bit-exact fresh=bit-exact
+INPUT_EXTENT_REUSE_PASS mode=metal4 motion=display color_transfer=none extents=127x127->43x43 backend_captures=2 padding=poisoned
+EXTENT_POISON_COMPARE mode=metal4 motion=low color_transfer=sRGB differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=metal4 motion=low color_transfer=sRGB differing_pixels=29/16384 max_byte_delta=3 mean_byte_delta_levels=0.000595 mean_normalized_delta=0.000002334 hashes=5ba1e87edd9b5b16/96392833e3b0b9df color_direct=0 motion=127x127 acceptance=measurement_only
+INPUT_EXTENT_REUSE_PASS mode=metal4 motion=low color_transfer=sRGB extents=127x127->43x43 backend_captures=2 padding=poisoned
+INPUT_CAPACITY_GROWTH_FALLBACK_PASS mode=metal4 mixed=128x127->127x128 capped=16x16 output=48x48
+EXACT_SCALE_CAP_PASS temporal=3744x2088 placement=48,36 caller=3840x2160 monitors=1080p,1440p,4K odd=1 transition=full
+METALFX_BACKEND_NATIVE_PASS captures=7 full_offsets=1 exposure_numeric=1 history=1 resize_generation=1 input_extent_reuse=1 capacity_growth=1 scale_fallback=1 replay_leases=1 stale_failure=1 encode_observer=1

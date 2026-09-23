@@ -1,0 +1,86 @@
+2026-09-23 16:28:12.829 backend-edge-scoped[44904:31284379] Metal API Validation Enabled
+2026-09-23 16:28:12.913 backend-edge-scoped[44904:31285179] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:12.976 backend-edge-scoped[44904:31285090] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.020 backend-edge-scoped[44904:31285179] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.062 backend-edge-scoped[44904:31285235] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.105 backend-edge-scoped[44904:31285235] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.156 backend-edge-scoped[44904:31285235] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.202 backend-edge-scoped[44904:31285235] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.243 backend-edge-scoped[44904:31285179] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.283 backend-edge-scoped[44904:31285235] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.336 backend-edge-scoped[44904:31285179] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.384 backend-edge-scoped[44904:31285179] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.426 backend-edge-scoped[44904:31285093] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.615 backend-edge-scoped[44904:31285093] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+2026-09-23 16:28:13.662 backend-edge-scoped[44904:31285093] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+EDGE_STAGING_CPU_ORACLE_PASS color=exact depth=exact motion=exact
+EXTENT_POISON_COMPARE mode=legacy motion=low color_transfer=none differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=legacy motion=low color_transfer=none differing_pixels=58/16384 max_byte_delta=2 mean_byte_delta_levels=0.001083 mean_normalized_delta=0.000004249 hashes=766c9f9359d4ca63/c45223f7d5cccb58 color_direct=0 motion=127x127 acceptance=measurement_only
+NATIVE_CAPACITY_COMPARE mode=legacy motion=low capacity=127x127 active=43x43 differing_pixels=58/16384 max_byte_delta=2 mean_byte_delta_levels=0.001083 mean_normalized_delta=0.000004249
+DIRECT_NATIVE_PARITY mode=legacy motion=low retained_pixels=0 max_byte_delta=0 mean_byte_delta_levels=0.000000 fresh_pixels=0 fresh_max_byte_delta=0
+SAME_DESCRIPTOR_NATIVE_PARITY_PASS mode=legacy motion=low retained=bit-exact fresh=bit-exact
+INPUT_EXTENT_REUSE_PASS mode=legacy motion=low color_transfer=none extents=127x127->43x43 backend_captures=2 padding=poisoned
+EDGE_STAGING_CPU_ORACLE_PASS color=exact depth=exact motion=exact
+EXTENT_POISON_COMPARE mode=metal4 motion=low color_transfer=none differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=metal4 motion=low color_transfer=none differing_pixels=58/16384 max_byte_delta=2 mean_byte_delta_levels=0.001083 mean_normalized_delta=0.000004249 hashes=766c9f9359d4ca63/c45223f7d5cccb58 color_direct=0 motion=127x127 acceptance=measurement_only
+NATIVE_CAPACITY_COMPARE mode=metal4 motion=low capacity=127x127 active=43x43 differing_pixels=58/16384 max_byte_delta=2 mean_byte_delta_levels=0.001083 mean_normalized_delta=0.000004249
+DIRECT_NATIVE_PARITY mode=metal4 motion=low retained_pixels=0 max_byte_delta=0 mean_byte_delta_levels=0.000000 fresh_pixels=0 fresh_max_byte_delta=0
+SAME_DESCRIPTOR_NATIVE_PARITY_PASS mode=metal4 motion=low retained=bit-exact fresh=bit-exact
+INPUT_EXTENT_REUSE_PASS mode=metal4 motion=low color_transfer=none extents=127x127->43x43 backend_captures=2 padding=poisoned
+EDGE_STAGING_CPU_ORACLE_PASS color=exact depth=exact motion=not-staged
+EXTENT_POISON_COMPARE mode=metal4 motion=display color_transfer=none differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=metal4 motion=display color_transfer=none differing_pixels=22/16384 max_byte_delta=1 mean_byte_delta_levels=0.000397 mean_normalized_delta=0.000001556 hashes=a87fa4225fd8c58b/e8bd25659a64000d color_direct=0 motion=128x128 acceptance=measurement_only
+NATIVE_CAPACITY_COMPARE mode=metal4 motion=display capacity=127x127 active=43x43 differing_pixels=22/16384 max_byte_delta=1 mean_byte_delta_levels=0.000397 mean_normalized_delta=0.000001556
+DIRECT_NATIVE_PARITY mode=metal4 motion=display retained_pixels=0 max_byte_delta=0 mean_byte_delta_levels=0.000000 fresh_pixels=0 fresh_max_byte_delta=0
+SAME_DESCRIPTOR_NATIVE_PARITY_PASS mode=metal4 motion=display retained=bit-exact fresh=bit-exact
+INPUT_EXTENT_REUSE_PASS mode=metal4 motion=display color_transfer=none extents=127x127->43x43 backend_captures=2 padding=poisoned
+EXTENT_POISON_COMPARE mode=metal4 motion=low color_transfer=sRGB differing_pixels=0/16384 max_byte_delta=0 mean_byte_delta_levels=0.000000 mean_normalized_delta=0.000000000
+EXTENT_POISON_INVARIANCE_PASS active_content=identical reset=1 output=bit-exact
+EXTENT_FRESH_CAPACITY_MEASUREMENT mode=metal4 motion=low color_transfer=sRGB differing_pixels=29/16384 max_byte_delta=3 mean_byte_delta_levels=0.000595 mean_normalized_delta=0.000002334 hashes=5ba1e87edd9b5b16/96392833e3b0b9df color_direct=0 motion=127x127 acceptance=measurement_only
+INPUT_EXTENT_REUSE_PASS mode=metal4 motion=low color_transfer=sRGB extents=127x127->43x43 backend_captures=2 padding=poisoned
+METALFX_EDGE_REUSE_ONLY_PASS

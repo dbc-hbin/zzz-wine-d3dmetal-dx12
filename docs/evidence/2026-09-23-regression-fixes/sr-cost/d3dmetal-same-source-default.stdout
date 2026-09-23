@@ -1,0 +1,82 @@
+wine: created the configuration directory '/tmp/yaagl-sr-d3dmetal-same-source-pair/metalfx-default-prefix'
+msync: bootstrapped mach port on wine-54c880c-msync-v2.
+msync: up and running.
+002c:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0060:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0058:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0058:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0058:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+0058:err:ole:start_rpcss Failed to open RpcSs service
+0060:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0060:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0060:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\winebth.sys,-1" -> L"C:\\windows\\inf\\winebth.inf"
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\wineusb.sys,-1" -> L"C:\\windows\\inf\\wineusb.inf"
+00b8:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00b8:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00e4:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+0164:fixme:msg:pack_message msg 14 (WM_ERASEBKGND) not supported yet
+002c:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+YAAGL_SR_CONFIG compiler role=borrowed-original object=0x7fdbaa8231e0 class=AGXG17XFamilyCompiler device_id=4294968672 device_name=Apple M5 Pro label=<nil> serializer_class=<nil>
+YAAGL_SR_CONFIG create mode=1 flags=0x42 input=1128x624 output=1920x1080 lowres_motion=1 auto_exposure=1 jittered_motion=0 depth_inverted=0 output_subrects=0
+YAAGL_SR_CONFIG compiler role=selected object=0x7fdbaa773340 class=AGXG17XFamilyCompiler device_id=4294968672 device_name=Apple M5 Pro label=<nil> serializer_class=<nil>
+YAAGL_SR_CONFIG feature device_class=AGXG17SDevice device_id=4294968672 mode=1 flags=0x42 input=1128x624 output=1920x1080 min_scale=1.00000000 max_scale=3.00000000 auto_exposure=1 lowres_motion=1 jittered_motion=0 depth_inverted=0 output_subrects=0
+YAAGL_SR_CONFIG scaler class=_M4FXTemporalScalingEffectBBR device_id=4294968672 mode=1 input_capacity=1128x624 active_input=1128x624 descriptor_output=1920x1080 requested_output_rect=0,0,1920,1080 temporal_output=1920x1080 placement=0,0 capped=0 max_scale=3.00000000 auto_exposure=1 lowres_motion=1 jittered_motion=0 reactive_enabled=1 reactive_format=R8Unorm:10 color_format=RGBA16Float:115 depth_format=R32Float:55 motion_format=RG16Float:65 output_format=RGBA16Float:115 ops_transfer=0 sharpen=0 combine_mask=0 cap_to_max=1 jitter=0.18750000,0.12962961 motion_scale=1128.00000000,624.00000000 pre_exposure=1.00000000 reset=1 required_usage=color:0x1,depth:0x1,motion:0x1,output:0x7,reactive:0x1
+YAAGL_SR_CONFIG frame active_input=1128x624 output_rect=0,0,1920,1080 temporal_output=1920x1080 placement=0,0 capped=0 exposure_mode=2 needs_staging=color:0,depth:0,motion:0,reactive:0,output_shadow:1,exposure_conversion:0
+YAAGL_SR_CONFIG texture name=caller_color size=1128x624 format=RGBA16Float:115 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_depth size=1128x624 format=R32Float:55 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_motion size=1128x624 format=RG16Float:65 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_reactive size=1128x624 format=R8Unorm:10 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_output size=1920x1080 format=RGBA16Float:115 storage=Shared:0 usage=0x17 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_exposure value=<nil>
+YAAGL_SR_CONFIG texture name=metalfx_color size=1128x624 format=RGBA16Float:115 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_depth size=1128x624 format=R32Float:55 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_motion size=1128x624 format=RG16Float:65 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_reactive size=1128x624 format=R8Unorm:10 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_output size=1920x1080 format=RGBA16Float:115 storage=Private:2 usage=0x7 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=2 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_exposure value=<nil>
+YAAGL_TIMING index=0 replay_host_wall_ms=0.6175 commit_to_feedback_host_ms=7.2408 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.0176 backend_post_gpu_ms=0.1551 sr_gpu_ms=4.1804 feedback_gpu_ms=4.0411 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=1 replay_host_wall_ms=0.3439 commit_to_feedback_host_ms=4.7998 backend_pre_gpu_ms=0.0078 metalfx_gpu_ms=4.1303 backend_post_gpu_ms=0.1583 sr_gpu_ms=4.2963 feedback_gpu_ms=4.2299 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=2 replay_host_wall_ms=0.1975 commit_to_feedback_host_ms=5.5366 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.9679 backend_post_gpu_ms=0.1611 sr_gpu_ms=5.1366 feedback_gpu_ms=4.2255 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=3 replay_host_wall_ms=0.1893 commit_to_feedback_host_ms=5.4332 backend_pre_gpu_ms=0.0077 metalfx_gpu_ms=4.8370 backend_post_gpu_ms=0.1580 sr_gpu_ms=5.0027 feedback_gpu_ms=4.1592 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=4 replay_host_wall_ms=0.1834 commit_to_feedback_host_ms=5.5176 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.9036 backend_post_gpu_ms=0.1592 sr_gpu_ms=5.0704 feedback_gpu_ms=4.1818 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=5 replay_host_wall_ms=0.2150 commit_to_feedback_host_ms=4.8438 backend_pre_gpu_ms=0.0080 metalfx_gpu_ms=4.2304 backend_post_gpu_ms=0.1602 sr_gpu_ms=4.3986 feedback_gpu_ms=3.9676 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=6 replay_host_wall_ms=0.1795 commit_to_feedback_host_ms=5.0292 backend_pre_gpu_ms=0.0076 metalfx_gpu_ms=4.4884 backend_post_gpu_ms=0.1178 sr_gpu_ms=4.6138 feedback_gpu_ms=4.0120 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=7 replay_host_wall_ms=0.1792 commit_to_feedback_host_ms=3.9766 backend_pre_gpu_ms=0.0075 metalfx_gpu_ms=3.4577 backend_post_gpu_ms=0.1110 sr_gpu_ms=3.5762 feedback_gpu_ms=2.9382 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=8 replay_host_wall_ms=0.1545 commit_to_feedback_host_ms=4.0158 backend_pre_gpu_ms=0.0056 metalfx_gpu_ms=3.4876 backend_post_gpu_ms=0.1114 sr_gpu_ms=3.6046 feedback_gpu_ms=3.0050 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=9 replay_host_wall_ms=0.1640 commit_to_feedback_host_ms=4.0378 backend_pre_gpu_ms=0.0057 metalfx_gpu_ms=3.5219 backend_post_gpu_ms=0.1110 sr_gpu_ms=3.6386 feedback_gpu_ms=2.9503 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=10 replay_host_wall_ms=0.1340 commit_to_feedback_host_ms=4.0512 backend_pre_gpu_ms=0.0056 metalfx_gpu_ms=3.5375 backend_post_gpu_ms=0.1118 sr_gpu_ms=3.6549 feedback_gpu_ms=2.9461 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=11 replay_host_wall_ms=0.1348 commit_to_feedback_host_ms=4.0157 backend_pre_gpu_ms=0.0058 metalfx_gpu_ms=3.5085 backend_post_gpu_ms=0.1113 sr_gpu_ms=3.6255 feedback_gpu_ms=2.9249 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=12 replay_host_wall_ms=0.1527 commit_to_feedback_host_ms=3.7182 backend_pre_gpu_ms=0.0055 metalfx_gpu_ms=3.1924 backend_post_gpu_ms=0.1128 sr_gpu_ms=3.3107 feedback_gpu_ms=2.6293 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=13 replay_host_wall_ms=0.1632 commit_to_feedback_host_ms=3.9833 backend_pre_gpu_ms=0.0052 metalfx_gpu_ms=3.4722 backend_post_gpu_ms=0.1113 sr_gpu_ms=3.5887 feedback_gpu_ms=2.9171 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=14 replay_host_wall_ms=0.1389 commit_to_feedback_host_ms=3.5171 backend_pre_gpu_ms=0.0057 metalfx_gpu_ms=3.0126 backend_post_gpu_ms=0.1004 sr_gpu_ms=3.1187 feedback_gpu_ms=2.4253 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=15 replay_host_wall_ms=0.1384 commit_to_feedback_host_ms=4.1123 backend_pre_gpu_ms=0.0056 metalfx_gpu_ms=3.5936 backend_post_gpu_ms=0.1121 sr_gpu_ms=3.7113 feedback_gpu_ms=2.9509 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=16 replay_host_wall_ms=0.1237 commit_to_feedback_host_ms=3.4164 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.9280 backend_post_gpu_ms=0.0945 sr_gpu_ms=3.0270 feedback_gpu_ms=2.2987 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=17 replay_host_wall_ms=0.1777 commit_to_feedback_host_ms=3.8734 backend_pre_gpu_ms=0.0057 metalfx_gpu_ms=3.3822 backend_post_gpu_ms=0.0907 sr_gpu_ms=3.4786 feedback_gpu_ms=2.7611 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=18 replay_host_wall_ms=0.1394 commit_to_feedback_host_ms=3.4660 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.9650 backend_post_gpu_ms=0.0900 sr_gpu_ms=3.0596 feedback_gpu_ms=2.3192 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=19 replay_host_wall_ms=0.1212 commit_to_feedback_host_ms=3.7339 backend_pre_gpu_ms=0.0051 metalfx_gpu_ms=3.2422 backend_post_gpu_ms=0.0897 sr_gpu_ms=3.3371 feedback_gpu_ms=2.6143 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=20 replay_host_wall_ms=0.1170 commit_to_feedback_host_ms=3.4249 backend_pre_gpu_ms=0.0044 metalfx_gpu_ms=2.9353 backend_post_gpu_ms=0.0914 sr_gpu_ms=3.0311 feedback_gpu_ms=2.2811 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=21 replay_host_wall_ms=0.1372 commit_to_feedback_host_ms=3.7190 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=3.2296 backend_post_gpu_ms=0.0918 sr_gpu_ms=3.3259 feedback_gpu_ms=2.6099 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=22 replay_host_wall_ms=0.1413 commit_to_feedback_host_ms=3.3959 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.8958 backend_post_gpu_ms=0.0927 sr_gpu_ms=2.9930 feedback_gpu_ms=2.2783 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=23 replay_host_wall_ms=0.1568 commit_to_feedback_host_ms=3.6247 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=3.1185 backend_post_gpu_ms=0.0902 sr_gpu_ms=3.2132 feedback_gpu_ms=2.4748 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=24 replay_host_wall_ms=0.1290 commit_to_feedback_host_ms=3.4323 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.9350 backend_post_gpu_ms=0.0906 sr_gpu_ms=3.0301 feedback_gpu_ms=2.2822 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=25 replay_host_wall_ms=0.1205 commit_to_feedback_host_ms=3.4546 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.9709 backend_post_gpu_ms=0.0910 sr_gpu_ms=3.0664 feedback_gpu_ms=2.3085 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=26 replay_host_wall_ms=0.1271 commit_to_feedback_host_ms=3.4336 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.9472 backend_post_gpu_ms=0.0904 sr_gpu_ms=3.0422 feedback_gpu_ms=2.2845 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=27 replay_host_wall_ms=0.1487 commit_to_feedback_host_ms=3.4055 backend_pre_gpu_ms=0.0046 metalfx_gpu_ms=2.9171 backend_post_gpu_ms=0.0902 sr_gpu_ms=3.0119 feedback_gpu_ms=2.2733 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=28 replay_host_wall_ms=0.1205 commit_to_feedback_host_ms=3.4409 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.9512 backend_post_gpu_ms=0.0898 sr_gpu_ms=3.0456 feedback_gpu_ms=2.2842 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=29 replay_host_wall_ms=0.1273 commit_to_feedback_host_ms=3.3600 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.8712 backend_post_gpu_ms=0.0825 sr_gpu_ms=2.9583 feedback_gpu_ms=2.2332 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=30 replay_host_wall_ms=0.1426 commit_to_feedback_host_ms=3.4641 backend_pre_gpu_ms=0.0038 metalfx_gpu_ms=2.9750 backend_post_gpu_ms=0.0905 sr_gpu_ms=3.0693 feedback_gpu_ms=2.3007 counter_valid=1 feedback_valid=1 result=PASS
+YAAGL_TIMING index=31 replay_host_wall_ms=0.1357 commit_to_feedback_host_ms=3.3882 backend_pre_gpu_ms=0.0045 metalfx_gpu_ms=2.8998 backend_post_gpu_ms=0.0826 sr_gpu_ms=2.9869 feedback_gpu_ms=2.2573 counter_valid=1 feedback_valid=1 result=PASS
+available_provider id=0x4d46580000000001 name=MetalFX (FSR 4 API)
+BENCH mode=mfx provider_id=0x4d46580000000001 provider=MetalFX (FSR 4 API) module=Z:\tmp\yaagl-sr-d3dmetal-same-source-pair\metalfx-workload\amd_fidelityfx_upscaler_dx12.dll dims=1128x624->1920x1080 mask=R8 create_flags=32 dispatch_flags=0 sharpen=off sharpness=0.5 warm=8 samples=24 api_ms_p50/p90=0.034/0.047 close_ms_p50/p90=0.000/0.000 execute_and_fence_wall_ms_p50/p90=3.674/4.249 fence_arm_cpu_ms_p50/p90=0.011/0.013 host_event_wait_ms_p50/p90=3.657/4.229 submit_to_fence_wall_ms_p50/p90=3.674/4.250 dispatch_to_fence_wall_ms_p50/p90=3.705/4.286 output_mean=0.449135 result=PASS

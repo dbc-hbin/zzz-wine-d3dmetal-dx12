@@ -1,0 +1,41 @@
+Same-D3DMetal MetalFX timing and follow-up attribution
+
+Original timing run
+
+Workload: `fsr-screenshot-bench`, MetalFX provider 0x4d46580000000001, 1128x624 -> 1920x1080, R8 reactive mask, create flags 32 (auto exposure), dispatch flags 0, sharpening off, 8 warm-up + 24 measured samples. Both runs used the generated current selection helper, MTL_HUD_ENABLED=0, MTL_CAPTURE_ENABLED=0, D3DM_MTL4=1, D3DM_ENABLE_METALFX=1, and separate temporary prefixes. The full staged Wine tree and D3DMetal framework were cloned into `/tmp`; the installed runtime and game were not touched.
+
+The original probe-disabled control and probe-enabled borrowed-compiler run both returned PASS and output_mean=0.449135. Control BENCH p50/p90: execute_and_fence_wall 4.089/4.249 ms, host_event_wait 4.024/4.213 ms, dispatch_to_fence_wall 4.206/4.392 ms. Probe-enabled BENCH p50/p90: execute_and_fence_wall 4.507/5.137 ms, host_event_wait 4.469/5.107 ms, dispatch_to_fence_wall 4.627/5.234 ms. Treat this sequential difference as scheduling/probe-run variation, not an optimization effect.
+
+The original instrumented sidecar emitted 32 rows; 32/32 had monotonically ordered Metal4 counter timestamps and valid commit feedback. Measured-only interval (indices 8..31, n=24) p50/p90:
+- replay_host_wall_ms: 0.4134/0.4942 ms (steady-clock elapsed across replay; not thread CPU time). The original raw row retains its historical `replay_cpu_ms` key; it records this wall-clock duration.
+- commit_to_feedback_host_ms: 3.9044/4.4651 ms (includes waiting for GPU completion; not pure CPU cost)
+- backend_pre_gpu_ms: 0.0055/0.0075 ms
+- MetalFX scaler GPU interval: 3.0678/3.6762 ms
+- backend_post_gpu_ms: 0.1119/0.1602 ms
+- whole SR backend GPU span: 3.1892/3.8034 ms
+- MTL4 feedback GPU interval: 3.1898/3.7807 ms
+
+Counter/fence ordering correction (SDK contract, 2026-09-23)
+
+The temporary D3D transport emits the producer encoder's updateFence:fence afterEncoderStages:MTLStageDispatch, ends that encoder, writes counter base on the same MTL4 command buffer, then enters state->encode. The backend sets the scaler fence before counter base+1, writes base+1 immediately before encodeToCommandBuffer, and writes base+2 immediately after. The restored consumer compute encoder subsequently waits on the same fence at MTLStageDispatch; that order is unchanged.
+
+SDK source and exact contract:
+- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk/System/Library/Frameworks/Metal.framework/Headers/MTL4CommandEncoder.h, lines 118-131: "This method encodes a command that updates a MTLFence instance after all previously-encoded commands in the current command encoder, corresponding to afterEncoderStages, complete."
+- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk/System/Library/Frameworks/Metal.framework/Headers/MTL4CommandBuffer.h, lines 162-165: "This method captures a timestamp after work prior to this command in the command buffer is complete. Work after this call may or may not have started."
+- /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX27.0.sdk/System/Library/Frameworks/MetalFX.framework/Headers/MTLFXTemporalScaler.h, lines 370-371 describes fence as optional synchronization for the app's untracked resources.
+
+Therefore the pre-MetalFX counter follows producer Dispatch work and its fence update; it is not merely placed before a later MTLFX wait. Retract the earlier tentative claim that this interval may contain the upstream producer wait. The MTLFX call's own use of its optional untracked-resource fence remains grouped with the operation; the interval is not a kernel-only measurement. New timing output names this interval metalfx_fence_span_ms; archived rows retain the historical metalfx_gpu_ms key. No redundant producer-wait diagnostic is warranted, and production ordering is unchanged.
+
+Follow-up runtime-matched observations
+
+A standalone MTL4 run aligned FFX jitter and output-cap policy (cap requested but not reached) measured scaler p50/p90 1.0704/1.0855 ms and passed output validation at mean 0.449134. Its actual scaler class was `_M4FXTemporalScalingEffectBBR` on Apple M5 Pro device registry ID 4294968672.
+
+One isolated same-D3DMetal run created a public empty-descriptor MTL4Compiler on the borrowed MPL device and used it for the feature; command buffers/resources/fence order were not changed. It passed output validation at mean 0.449135; measured-only scaler p50/p90 was 2.2108/2.4505 ms. The trace reports the same device ID, compiler class (`AGXG17XFamilyCompiler`, nil label and pipeline-data-set serializer), scaler class `_M4FXTemporalScalingEffectBBR`, active and descriptor dimensions, scale limits, feature flags, reactive mask, and jitter as the direct run. The older 3.0678 ms borrowed result was not a fresh same-instrumentation control; do not attribute the lower follow-up number to compiler replacement.
+
+The trace did find different caller texture usage/storage: direct inputs Shared usage 0x3 and output Private usage 0x3; D3DMetal inputs Shared usage 0x11 and output Shared usage 0x17. Both paths require no input staging and use the same Private usage-0x7 output shadow. Public buffer/heap/parent/IOSurface backing metadata is being added to the next fresh borrowed trace before selecting a matched-resource variant. These caller texture differences remain concrete, untested variables.
+
+In the public-default run, all 32 counter and feedback records were individually valid, but MTL4 feedback GPU interval p50 was 1.6305 ms while timestamped full SR span p50 was 2.2938 ms. Do not treat those intervals as identical or use feedback as a cross-check for that run.
+
+Conclusion and next work
+
+The aligned direct scaler and the public-default same-D3D scaler remain about 2.07x apart at p50 despite matching device, actual scaler class, format, geometry, cap behavior, temporal flags, jitter, and effective output. Caller texture usage/backing still differs, and the compiler effect is not isolated. No production SR optimization is justified by these measurements; keep production fence ordering unchanged. After the lifetimes agent's GPU matrix, run the fresh borrowed-compiler control with the same timing/config source and public backing trace, then prepare one matched-resource standalone variant from observed backing. See `d3dmetal-default-compiler-results.txt`, `d3dmetal-standalone-config-comparison.txt`, and paired `.stdout`/`build-inputs.txt` artifacts.

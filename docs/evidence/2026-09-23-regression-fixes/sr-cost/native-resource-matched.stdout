@@ -1,0 +1,64 @@
+device baseline          metal=    0.06 MiB footprint=    5.00 MiB rss=    5.81 MiB
+compiler baseline        metal=    0.06 MiB footprint=    5.01 MiB rss=    5.84 MiB
+GPU_FREQ=24000000
+caller textures          metal=   28.39 MiB footprint=   28.81 MiB rss=   29.37 MiB
+YAAGL_SR_CONFIG compiler role=borrowed-original object=0x7fa37a907980 class=AGXG17XFamilyCompiler device_id=4294968672 device_name=Apple M5 Pro label=<nil> serializer_class=<nil>
+YAAGL_SR_CONFIG create mode=1 flags=0x42 input=1128x624 output=1920x1080 lowres_motion=1 auto_exposure=1 jittered_motion=0 depth_inverted=0 output_subrects=0
+YAAGL_SR_CONFIG compiler role=selected object=0x7fa37a907980 class=AGXG17XFamilyCompiler device_id=4294968672 device_name=Apple M5 Pro label=<nil> serializer_class=<nil>
+YAAGL_SR_CONFIG feature device_class=AGXG17SDevice device_id=4294968672 mode=1 flags=0x42 input=1128x624 output=1920x1080 min_scale=1.00000000 max_scale=3.00000000 auto_exposure=1 lowres_motion=1 jittered_motion=0 depth_inverted=0 output_subrects=0
+2026-09-23 17:23:05.065 native-metal4-counter-pattern-matched[56159:31490882] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+YAAGL_SR_CONFIG scaler class=_M4FXTemporalScalingEffectBBR device_id=4294968672 mode=1 input_capacity=1128x624 active_input=1128x624 descriptor_output=1920x1080 requested_output_rect=0,0,1920,1080 temporal_output=1920x1080 placement=0,0 capped=0 max_scale=3.00000000 auto_exposure=1 lowres_motion=1 jittered_motion=0 reactive_enabled=1 reactive_format=R8Unorm:10 color_format=RGBA16Float:115 depth_format=R32Float:55 motion_format=RG16Float:65 output_format=RGBA16Float:115 ops_transfer=0 sharpen=0 combine_mask=0 cap_to_max=1 jitter=0.18750000,0.12962961 motion_scale=1128.00000000,624.00000000 pre_exposure=1.00000000 reset=1 required_usage=color:0x1,depth:0x1,motion:0x1,output:0x7,reactive:0x1
+YAAGL_SR_CONFIG frame active_input=1128x624 output_rect=0,0,1920,1080 temporal_output=1920x1080 placement=0,0 capped=0 exposure_mode=2 needs_staging=color:0,depth:0,motion:0,reactive:0,output_shadow:1,exposure_conversion:0
+YAAGL_SR_CONFIG texture name=caller_color size=1128x624 format=RGBA16Float:115 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_depth size=1128x624 format=R32Float:55 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_motion size=1128x624 format=RG16Float:65 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_reactive size=1128x624 format=R8Unorm:10 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_output size=1920x1080 format=RGBA16Float:115 storage=Shared:0 usage=0x17 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=caller_exposure value=<nil>
+YAAGL_SR_CONFIG texture name=metalfx_color size=1128x624 format=RGBA16Float:115 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_depth size=1128x624 format=R32Float:55 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_motion size=1128x624 format=RG16Float:65 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_reactive size=1128x624 format=R8Unorm:10 storage=Shared:0 usage=0x11 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=1 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_output size=1920x1080 format=RGBA16Float:115 storage=Private:2 usage=0x7 device_id=4294968672 buffer=0x0 buffer_class=<nil> buffer_length=0 buffer_offset=0 buffer_bpr=0 parent=0x0 parent_class=<nil> heap=0x0 heap_class=<nil> optimized=1 hazard=2 iosurface=0x0 iosurface_plane=0
+YAAGL_SR_CONFIG texture name=metalfx_exposure value=<nil>
+GPU_PROBE frame=0 pre_ms=0.0080 scaler_ms=4.1959 finish_ms=0.2873 total_ms=4.4912 commit_wall_ms=8.3054 feedback_gpu_start=464086.293041833 feedback_gpu_end=464086.297236750
+GPU_PROBE frame=1 pre_ms=0.0114 scaler_ms=3.9344 finish_ms=0.1232 total_ms=4.0690 commit_wall_ms=4.4920 feedback_gpu_start=464086.299430125 feedback_gpu_end=464086.302356208
+GPU_PROBE frame=2 pre_ms=0.0184 scaler_ms=2.0585 finish_ms=0.1249 total_ms=2.2018 commit_wall_ms=2.6553 feedback_gpu_start=464086.303328750 feedback_gpu_end=464086.305292541
+GPU_PROBE frame=3 pre_ms=0.0106 scaler_ms=1.5202 finish_ms=0.0960 total_ms=1.6267 commit_wall_ms=2.0146 feedback_gpu_start=464086.306032791 feedback_gpu_end=464086.307565208
+GPU_PROBE frame=4 pre_ms=0.0049 scaler_ms=1.2537 finish_ms=0.0951 total_ms=1.3537 commit_wall_ms=1.7903 feedback_gpu_start=464086.308301916 feedback_gpu_end=464086.309534208
+GPU_PROBE frame=5 pre_ms=0.0193 scaler_ms=1.0534 finish_ms=0.0890 total_ms=1.1617 commit_wall_ms=1.6410 feedback_gpu_start=464086.310234875 feedback_gpu_end=464086.311408750
+GPU_PROBE frame=6 pre_ms=0.0069 scaler_ms=1.0757 finish_ms=0.0861 total_ms=1.1686 commit_wall_ms=1.6183 feedback_gpu_start=464086.312098166 feedback_gpu_end=464086.313267416
+GPU_PROBE frame=7 pre_ms=0.0029 scaler_ms=1.0828 finish_ms=0.0876 total_ms=1.1732 commit_wall_ms=1.6271 feedback_gpu_start=464086.313895666 feedback_gpu_end=464086.315069333
+warm 8 drained           metal=  242.39 MiB footprint=  320.83 MiB rss=   40.59 MiB
+GPU_PROBE frame=8 pre_ms=0.0081 scaler_ms=0.9855 finish_ms=0.0878 total_ms=1.0814 commit_wall_ms=1.5177 feedback_gpu_start=464086.315704541 feedback_gpu_end=464086.316786791
+GPU_PROBE frame=9 pre_ms=0.0185 scaler_ms=1.0548 finish_ms=0.0838 total_ms=1.1572 commit_wall_ms=1.6400 feedback_gpu_start=464086.317411041 feedback_gpu_end=464086.318578916
+GPU_PROBE frame=10 pre_ms=0.0057 scaler_ms=1.0664 finish_ms=0.0846 total_ms=1.1566 commit_wall_ms=1.6075 feedback_gpu_start=464086.319209750 feedback_gpu_end=464086.320367041
+GPU_PROBE frame=11 pre_ms=0.0042 scaler_ms=1.0793 finish_ms=0.0771 total_ms=1.1606 commit_wall_ms=1.6283 feedback_gpu_start=464086.320988250 feedback_gpu_end=464086.322149458
+GPU_PROBE frame=12 pre_ms=0.0069 scaler_ms=1.0413 finish_ms=0.0874 total_ms=1.1355 commit_wall_ms=1.6737 feedback_gpu_start=464086.322824166 feedback_gpu_end=464086.323991500
+GPU_PROBE frame=13 pre_ms=0.0211 scaler_ms=1.0548 finish_ms=0.0878 total_ms=1.1637 commit_wall_ms=1.6908 feedback_gpu_start=464086.324673083 feedback_gpu_end=464086.325846500
+GPU_PROBE frame=14 pre_ms=0.0044 scaler_ms=1.0880 finish_ms=0.0909 total_ms=1.1833 commit_wall_ms=1.6504 feedback_gpu_start=464086.326477833 feedback_gpu_end=464086.327661583
+GPU_PROBE frame=15 pre_ms=0.0036 scaler_ms=1.0923 finish_ms=0.1310 total_ms=1.2269 commit_wall_ms=1.7075 feedback_gpu_start=464086.328300416 feedback_gpu_end=464086.329527875
+GPU_PROBE frame=16 pre_ms=0.0047 scaler_ms=1.0855 finish_ms=0.0865 total_ms=1.1768 commit_wall_ms=1.6349 feedback_gpu_start=464086.330134583 feedback_gpu_end=464086.331312000
+GPU_PROBE frame=17 pre_ms=0.0022 scaler_ms=1.0857 finish_ms=0.0866 total_ms=1.1746 commit_wall_ms=1.5927 feedback_gpu_start=464086.331964250 feedback_gpu_end=464086.333138708
+GPU_PROBE frame=18 pre_ms=0.0052 scaler_ms=1.0922 finish_ms=0.0950 total_ms=1.1924 commit_wall_ms=1.6832 feedback_gpu_start=464086.333777250 feedback_gpu_end=464086.334970333
+GPU_PROBE frame=19 pre_ms=0.0046 scaler_ms=1.0892 finish_ms=0.0878 total_ms=1.1816 commit_wall_ms=1.6620 feedback_gpu_start=464086.335604958 feedback_gpu_end=464086.336787250
+GPU_PROBE frame=20 pre_ms=0.0280 scaler_ms=1.3062 finish_ms=0.0856 total_ms=1.4198 commit_wall_ms=1.8651 feedback_gpu_start=464086.337423166 feedback_gpu_end=464086.338849791
+GPU_PROBE frame=21 pre_ms=0.0252 scaler_ms=1.0653 finish_ms=0.0883 total_ms=1.1788 commit_wall_ms=1.6660 feedback_gpu_start=464086.339507541 feedback_gpu_end=464086.340696125
+GPU_PROBE frame=22 pre_ms=0.1142 scaler_ms=1.0942 finish_ms=0.0968 total_ms=1.3053 commit_wall_ms=1.7045 feedback_gpu_start=464086.341348625 feedback_gpu_end=464086.342540625
+GPU_PROBE frame=23 pre_ms=0.0055 scaler_ms=1.0876 finish_ms=0.0891 total_ms=1.1821 commit_wall_ms=1.6126 feedback_gpu_start=464086.343161500 feedback_gpu_end=464086.344344458
+GPU_PROBE frame=24 pre_ms=0.0058 scaler_ms=1.1164 finish_ms=0.1081 total_ms=1.2303 commit_wall_ms=1.6998 feedback_gpu_start=464086.344948458 feedback_gpu_end=464086.346179375
+GPU_PROBE frame=25 pre_ms=0.0057 scaler_ms=1.0788 finish_ms=0.0907 total_ms=1.1752 commit_wall_ms=1.6266 feedback_gpu_start=464086.346806916 feedback_gpu_end=464086.347982708
+GPU_PROBE frame=26 pre_ms=0.0046 scaler_ms=1.0837 finish_ms=0.0889 total_ms=1.1773 commit_wall_ms=1.6731 feedback_gpu_start=464086.348629958 feedback_gpu_end=464086.349807875
+GPU_PROBE frame=27 pre_ms=0.0067 scaler_ms=1.0788 finish_ms=0.0860 total_ms=1.1715 commit_wall_ms=1.6591 feedback_gpu_start=464086.350454041 feedback_gpu_end=464086.351626375
+GPU_PROBE frame=28 pre_ms=0.0057 scaler_ms=1.0550 finish_ms=0.0907 total_ms=1.1515 commit_wall_ms=1.6646 feedback_gpu_start=464086.352263833 feedback_gpu_end=464086.353448041
+GPU_PROBE frame=29 pre_ms=0.0197 scaler_ms=1.0528 finish_ms=0.0859 total_ms=1.1583 commit_wall_ms=1.6442 feedback_gpu_start=464086.354086875 feedback_gpu_end=464086.355256208
+GPU_PROBE frame=30 pre_ms=0.0046 scaler_ms=1.0816 finish_ms=0.0879 total_ms=1.1741 commit_wall_ms=1.6418 feedback_gpu_start=464086.355877625 feedback_gpu_end=464086.357052500
+GPU_PROBE frame=31 pre_ms=0.0043 scaler_ms=1.0917 finish_ms=0.0921 total_ms=1.1881 commit_wall_ms=1.6772 feedback_gpu_start=464086.357727583 feedback_gpu_end=464086.358916375
+steady 24 drained        metal=  242.39 MiB footprint=  320.83 MiB rss=   40.59 MiB
+OUTPUT_VALIDATION mean=0.449134 pixels=2073600 result=PASS
+feature reset/pool held  metal=  242.39 MiB footprint=  336.74 MiB rss=   56.46 MiB
+backend+textures gone/drained metal=  226.44 MiB footprint=  320.58 MiB rss=   56.44 MiB
+compiler released        metal=  226.44 MiB footprint=  320.58 MiB rss=   56.44 MiB

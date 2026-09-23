@@ -1,0 +1,45 @@
+device baseline          metal=    0.06 MiB footprint=    5.15 MiB rss=    5.96 MiB
+compiler baseline        metal=    0.06 MiB footprint=    5.19 MiB rss=    6.00 MiB
+GPU_FREQ=24000000
+caller textures          metal=   28.77 MiB footprint=    5.55 MiB rss=    6.29 MiB
+2026-09-23 14:27:52.473 yaagl-sr-timing-probe[87518:30719652] 
+Error:
+
+ Error Domain=com.apple.appleneuralengine Code=26 "doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error" UserInfo={NSLocalizedDescription=doCompileModel:csIdentity:sandboxExtension:options:qos:withReply:: Bad argument error}
+GPU_PROBE frame=0 pre_ms=0.0108 scaler_ms=4.0622 finish_ms=0.2735 total_ms=4.3465 commit_wall_ms=9.3013
+GPU_PROBE frame=1 pre_ms=0.0449 scaler_ms=3.2489 finish_ms=0.0920 total_ms=3.3858 commit_wall_ms=3.9860
+GPU_PROBE frame=2 pre_ms=0.0050 scaler_ms=1.7617 finish_ms=0.0688 total_ms=1.8355 commit_wall_ms=2.5360
+GPU_PROBE frame=3 pre_ms=0.0027 scaler_ms=1.3107 finish_ms=0.0535 total_ms=1.3669 commit_wall_ms=1.9680
+GPU_PROBE frame=4 pre_ms=0.0037 scaler_ms=1.0438 finish_ms=0.0375 total_ms=1.0850 commit_wall_ms=1.7775
+GPU_PROBE frame=5 pre_ms=0.0021 scaler_ms=0.9324 finish_ms=0.0343 total_ms=0.9688 commit_wall_ms=1.6658
+GPU_PROBE frame=6 pre_ms=0.0023 scaler_ms=0.9463 finish_ms=0.0348 total_ms=0.9835 commit_wall_ms=1.7043
+GPU_PROBE frame=7 pre_ms=0.0024 scaler_ms=0.9485 finish_ms=0.0348 total_ms=0.9857 commit_wall_ms=1.7233
+warm 8 drained           metal=  242.77 MiB footprint=  310.54 MiB rss=   17.98 MiB
+GPU_PROBE frame=8 pre_ms=0.0020 scaler_ms=0.8686 finish_ms=0.0354 total_ms=0.9060 commit_wall_ms=1.6024
+GPU_PROBE frame=9 pre_ms=0.0022 scaler_ms=0.9566 finish_ms=0.0341 total_ms=0.9930 commit_wall_ms=1.6771
+GPU_PROBE frame=10 pre_ms=0.0022 scaler_ms=0.9525 finish_ms=0.0348 total_ms=0.9895 commit_wall_ms=1.6658
+GPU_PROBE frame=11 pre_ms=0.0022 scaler_ms=0.9497 finish_ms=0.0348 total_ms=0.9867 commit_wall_ms=1.7195
+GPU_PROBE frame=12 pre_ms=0.0022 scaler_ms=0.9363 finish_ms=0.0353 total_ms=0.9738 commit_wall_ms=1.6312
+GPU_PROBE frame=13 pre_ms=0.0024 scaler_ms=0.9475 finish_ms=0.0342 total_ms=0.9841 commit_wall_ms=1.6830
+GPU_PROBE frame=14 pre_ms=0.0022 scaler_ms=0.9549 finish_ms=0.0344 total_ms=0.9915 commit_wall_ms=1.7100
+GPU_PROBE frame=15 pre_ms=0.0021 scaler_ms=0.9481 finish_ms=0.0338 total_ms=0.9840 commit_wall_ms=1.6883
+GPU_PROBE frame=16 pre_ms=0.0023 scaler_ms=0.9544 finish_ms=0.0350 total_ms=0.9917 commit_wall_ms=1.6674
+GPU_PROBE frame=17 pre_ms=0.0022 scaler_ms=0.9625 finish_ms=0.0350 total_ms=0.9997 commit_wall_ms=1.7319
+GPU_PROBE frame=18 pre_ms=0.0023 scaler_ms=0.9527 finish_ms=0.0345 total_ms=0.9895 commit_wall_ms=1.6932
+GPU_PROBE frame=19 pre_ms=0.0023 scaler_ms=0.9716 finish_ms=0.0354 total_ms=1.0092 commit_wall_ms=1.6978
+GPU_PROBE frame=20 pre_ms=0.0023 scaler_ms=0.9490 finish_ms=0.0343 total_ms=0.9857 commit_wall_ms=1.6647
+GPU_PROBE frame=21 pre_ms=0.0022 scaler_ms=0.9547 finish_ms=0.0346 total_ms=0.9915 commit_wall_ms=1.7315
+GPU_PROBE frame=22 pre_ms=0.0023 scaler_ms=0.9470 finish_ms=0.0344 total_ms=0.9837 commit_wall_ms=1.6855
+GPU_PROBE frame=23 pre_ms=0.0022 scaler_ms=0.9532 finish_ms=0.0342 total_ms=0.9895 commit_wall_ms=1.6829
+GPU_PROBE frame=24 pre_ms=0.0023 scaler_ms=0.9581 finish_ms=0.0350 total_ms=0.9955 commit_wall_ms=1.7155
+GPU_PROBE frame=25 pre_ms=0.0023 scaler_ms=0.9510 finish_ms=0.0347 total_ms=0.9880 commit_wall_ms=1.7184
+GPU_PROBE frame=26 pre_ms=0.0021 scaler_ms=0.9595 finish_ms=0.0357 total_ms=0.9972 commit_wall_ms=1.7125
+GPU_PROBE frame=27 pre_ms=0.0023 scaler_ms=0.9944 finish_ms=0.0355 total_ms=1.0323 commit_wall_ms=1.7439
+GPU_PROBE frame=28 pre_ms=0.0023 scaler_ms=0.9468 finish_ms=0.0361 total_ms=0.9852 commit_wall_ms=1.6843
+GPU_PROBE frame=29 pre_ms=0.0020 scaler_ms=0.9537 finish_ms=0.0343 total_ms=0.9901 commit_wall_ms=1.7267
+GPU_PROBE frame=30 pre_ms=0.0023 scaler_ms=0.9456 finish_ms=0.0344 total_ms=0.9824 commit_wall_ms=1.6589
+GPU_PROBE frame=31 pre_ms=0.0022 scaler_ms=0.9617 finish_ms=0.0349 total_ms=0.9988 commit_wall_ms=1.6882
+steady 24 drained        metal=  242.77 MiB footprint=  310.55 MiB rss=   18.00 MiB
+feature reset/pool held  metal=  242.77 MiB footprint=  310.55 MiB rss=   18.00 MiB
+backend+textures gone/drained metal=  226.69 MiB footprint=  310.35 MiB rss=   17.99 MiB
+compiler released        metal=  226.69 MiB footprint=  310.35 MiB rss=   17.99 MiB

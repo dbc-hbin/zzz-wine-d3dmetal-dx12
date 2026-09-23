@@ -1,0 +1,90 @@
+msync: bootstrapped mach port on wine-54a84bb-msync-v2.
+msync: up and running.
+002c:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0058:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+2026-09-23 16:21:18.569 wine[73825:31191908] Metal API Validation Enabled
+2026-09-23 16:21:18.569 wine[73827:31191909] Metal API Validation Enabled
+0058:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0058:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0058:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+0058:err:ole:start_rpcss Failed to open RpcSs service
+0060:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0060:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0060:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+2026-09-23 16:21:19.542 wine[73712:31191573] Metal API Validation Enabled
+2026-09-23 16:21:19.544 wine[73697:31191540] Metal API Validation Enabled
+2026-09-23 16:21:20.303 wine[73857:31192134] Metal API Validation Enabled
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\winebth.sys,-1" -> L"C:\\windows\\inf\\winebth.inf"
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\wineusb.sys,-1" -> L"C:\\windows\\inf\\wineusb.inf"
+00b8:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00b8:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00e4:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+0164:fixme:msg:pack_message msg 14 (WM_ERASEBKGND) not supported yet
+2026-09-23 16:21:36.084 wine[74175:31193307] Metal API Validation Enabled
+002c:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+2026-09-23 16:21:43.038 wine[73640:31191506] Metal API Validation Enabled
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+2026-09-23 16:21:43.430 wine[73640:31193912] [libMTLHud] Metric com.apple.hud-label.metalfx.v2.scaling_version already exist
+2026-09-23 16:21:43.430 wine[73640:31193912] [libMTLHud] Metric com.apple.hud-label.metalfx.timing already exist
+D3D12_SAME_LIST_RECORDED list=00007FB620218010 allocator=00007FB5BF76A090 replays=16
+2026-09-23 16:21:43.431 wine[73640:31193665] [libMTLHud] Metric com.apple.hud-label.metalfx.timing already exist
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=1 command=0x245b64008 slot=0x7fb5bf7d4058 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=453787648
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=1 slot=0x7fb5bf7d4058 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=1 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=2 command=0x245b64008 slot=0x7fb5bf4c3c98 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=2 slot=0x7fb5bf4c3c98 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=2 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=3 command=0x245b64008 slot=0x7fb5bf4c3c98 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=3 slot=0x7fb5bf4c3c98 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=3 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=4 command=0x245b64008 slot=0x7fb5feffb538 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=4 slot=0x7fb5feffb538 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=4 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=5 command=0x245b64008 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=5 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=5 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=6 command=0x245b64008 slot=0x7fb5eefef4c8 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=6 slot=0x7fb5eefef4c8 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=6 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=7 command=0x245b64008 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=7 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=7 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=8 command=0x245b64008 slot=0x7fb5bf4d2fc8 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=8 slot=0x7fb5bf4d2fc8 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=8 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=9 command=0x245b64008 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=9 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=9 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=10 command=0x245b64008 slot=0x7fb5bf921748 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=10 slot=0x7fb5bf921748 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=10 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=11 command=0x245b64008 slot=0x7fb5cf2be8f8 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=11 slot=0x7fb5cf2be8f8 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=11 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=12 command=0x245b64008 slot=0x7fb5bf4d2fc8 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=12 slot=0x7fb5bf4d2fc8 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=12 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=13 command=0x245b64008 slot=0x7fb5bf921748 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=13 slot=0x7fb5bf921748 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=13 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=14 command=0x245b64008 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=14 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=14 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=15 command=0x245b64008 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=15 slot=0x7fb5bf7e1398 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=15 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ENCODE feature=1 eval=1 replay=16 command=0x245b64008 slot=0x7fb5bf4d2fc8 buffer=0x7fb5df0d1200 kind=0 ok=1 metal_bytes=451313664
+YAAGL_LEASE_FEEDBACK feature=1 eval=1 replay=16 slot=0x7fb5bf4d2fc8 buffer=0x7fb5df0d1200 kind=0 metal_before=451313664 metal_after=451313664 owner_slots=0
+D3D12_SAME_LIST_FENCE_COMPLETE replay=16 list=00007FB620218010 allocator=00007FB5BF76A090
+YAAGL_LEASE_ALLOCATOR_RESET feature=1 eval=1 replays=16 retained_slots=0 metal_bytes=451313664
+FSR_TRANSLATOR_D3D12_PASS interiorMean=0.250244 borderMaximum=0.000000 temporal=3744x2088 placement=48,36 caller=3840x2160 allocations=1 frees=1 replays=16

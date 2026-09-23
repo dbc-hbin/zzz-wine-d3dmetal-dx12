@@ -1,0 +1,7 @@
+standalone_input_sha256: f3ac38027f3d255fbc973542e6018c3cac4f292fc3a84d9e193d37a9abbabb6c  /Users/hanbinnoh/Documents/zzz-wine-d3dmetal-dx12/docs/evidence/2026-09-23-regression-fixes/sr-cost/native-metal4-counter-pattern-probe.mm
+matched_standalone_sha256: e5321651148be9e5f6fa21d963e3e1b37dfef59f3e9dd5f5ece0375fd1217f96  /tmp/yaagl-sr-native-aligned/native-metal4-counter-pattern-matched.mm
+instrumented_backend_sha256: b81d32f98853d0e87229135caee9cae988ec5d1f6c1ea4233e90b776a43bb241  /tmp/yaagl-sr-native-aligned/instrumented/metalfx-backend.timing.mm
+layout_header_sha256: 0bad2641334f1777b023e60094ef05ef03569fee5717264632980dd3532ea295  /tmp/yaagl-lease-commit-build/fsr-kernels.inc
+c530490b57bdff53cd53c6cbfdd2ea7d7b73865f9130ba823535968bb3a1d823  /tmp/yaagl-lease-commit-build/layout.hpp
+variant: FFX jitter + output cap; keep Blit-stage wait for readback ordering
+native-aligned-jitter-cap.stdout sha256: 66bb04992aa4342f139002d2a3fbdc60b35c36ccecb9354f4f97a6582504fa20

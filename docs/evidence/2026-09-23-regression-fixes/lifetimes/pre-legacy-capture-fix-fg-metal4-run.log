@@ -1,0 +1,107 @@
+msync: bootstrapped mach port on wine-54c1452-msync-v2.
+msync: up and running.
+002c:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0060:fixme:actctx:parse_depend_manifests Could not find dependent assembly L"Microsoft.Windows.Common-Controls" (6.0.0.0)
+0058:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+0060:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+2026-09-23 16:52:31.796 wine[10772:31371714] Metal API Validation Enabled
+2026-09-23 16:52:31.796 wine[10770:31371713] Metal API Validation Enabled
+0058:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0058:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0058:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+0058:err:ole:start_rpcss Failed to open RpcSs service
+0060:err:ole:StdMarshalImpl_MarshalInterface Failed to create ifstub, hr 0x80004002
+0060:err:ole:CoMarshalInterface Failed to marshal the interface {6d5140c1-7436-11ce-8034-00aa006009fa}, hr 0x80004002
+0060:err:ole:apartment_get_local_server_stream Failed: 0x80004002
+2026-09-23 16:52:32.756 wine[10768:31371693] Metal API Validation Enabled
+2026-09-23 16:52:32.757 wine[10764:31371667] Metal API Validation Enabled
+2026-09-23 16:52:33.124 wine[10799:31371861] Metal API Validation Enabled
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\winebth.sys,-1" -> L"C:\\windows\\inf\\winebth.inf"
+00ac:err:setupapi:SetupDefaultQueueCallbackW copy error 1812 L"@C:\\windows\\system32\\drivers\\wineusb.sys,-1" -> L"C:\\windows\\inf\\wineusb.inf"
+00b8:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00b8:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:file:NtLockFile I/O completion on lock not implemented yet
+00e4:fixme:ntdll:NtQuerySystemInformation info_class SYSTEM_PERFORMANCE_INFORMATION
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00e4:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 5)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+00b8:fixme:msi:internal_ui_handler internal UI not implemented for message 0x0b000000 (UI level = 1)
+0164:fixme:msg:pack_message msg 14 (WM_ERASEBKGND) not supported yet
+2026-09-23 16:52:38.733 wine[10903:31372115] Metal API Validation Enabled
+002c:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+0194:err:setupapi:do_file_copyW Unsupported style(s) 0x10
+2026-09-23 16:52:40.855 wine[10750:31371646] Metal API Validation Enabled
+0024:err:vulkan:vulkan_init_once Wine was built without Vulkan support.
+yaagl-fsr-framegeneration: operation=2 stage=prepare_camera_planes result=6 flags=0x0 input=640x384 camera_near=0.100000001 camera_far=0.100000001 fov=1.04719758 scale=-1
+yaagl-fsr-framegeneration: operation=2 stage=prepare_camera_planes result=6 flags=0x0 input=640x384 camera_near=0 camera_far=1000 fov=1.04719758 scale=-1
+yaagl-fsr-framegeneration: operation=2 stage=prepare_camera_planes result=6 flags=0x0 input=640x384 camera_near=0.100000001 camera_far=0 fov=1.04719758 scale=-1
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-finite-depth-reversed id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-finite-depth-reversed pattern=0 step=3 previousMAE=0.121593 currentMAE=0.121605 midpointMAE=0.000372 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=metalfx-finite-depth-reversed pattern=0 step=4 previousMAE=0.121580 currentMAE=0.121576 midpointMAE=0.000361 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=metalfx-finite-depth-reversed pattern=1 step=3 previousMAE=0.120183 currentMAE=0.120163 midpointMAE=0.000345 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=metalfx-finite-depth-reversed pattern=1 step=4 previousMAE=0.120114 currentMAE=0.120116 midpointMAE=0.000341 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-finite-depth-reversed intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=builtin id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=builtin pattern=0 step=3 previousMAE=0.121593 currentMAE=0.121605 midpointMAE=0.000372 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=builtin pattern=0 step=4 previousMAE=0.121580 currentMAE=0.121576 midpointMAE=0.000361 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=builtin pattern=1 step=3 previousMAE=0.120183 currentMAE=0.120163 midpointMAE=0.000345 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=builtin pattern=1 step=4 previousMAE=0.120114 currentMAE=0.120116 midpointMAE=0.000341 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=builtin intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-camera-v1-absent id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-camera-v1-absent pattern=0 step=3 previousMAE=0.121593 currentMAE=0.121605 midpointMAE=0.000372 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=metalfx-camera-v1-absent pattern=0 step=4 previousMAE=0.121580 currentMAE=0.121576 midpointMAE=0.000361 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=metalfx-camera-v1-absent pattern=1 step=3 previousMAE=0.120183 currentMAE=0.120163 midpointMAE=0.000345 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=metalfx-camera-v1-absent pattern=1 step=4 previousMAE=0.120114 currentMAE=0.120116 midpointMAE=0.000341 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-camera-v1-absent intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-preselection-rejections id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-preselection-rejections pattern=0 step=3 previousMAE=0.121593 currentMAE=0.121605 midpointMAE=0.000372 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=metalfx-preselection-rejections pattern=0 step=4 previousMAE=0.121580 currentMAE=0.121576 midpointMAE=0.000361 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=metalfx-preselection-rejections pattern=1 step=3 previousMAE=0.120183 currentMAE=0.120163 midpointMAE=0.000345 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=metalfx-preselection-rejections pattern=1 step=4 previousMAE=0.120114 currentMAE=0.120116 midpointMAE=0.000341 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-preselection-rejections intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=native-override id=0xf600000000c01006 name=3.1.6
+FSR_FRAMEGENERATION_MEASURE path=native-override pattern=0 step=3 previousMAE=0.121589 currentMAE=0.121609 midpointMAE=0.000238 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=native-override pattern=0 step=4 previousMAE=0.121574 currentMAE=0.121574 midpointMAE=0.000242 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=native-override pattern=1 step=3 previousMAE=0.120159 currentMAE=0.120143 midpointMAE=0.000233 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=native-override pattern=1 step=4 previousMAE=0.120094 currentMAE=0.120086 midpointMAE=0.000238 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=native-override intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-hudless-rect-ui id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-hudless-rect-ui pattern=0 step=3 previousMAE=0.120322 currentMAE=0.122015 midpointMAE=0.001699 endpointSeparation=0.227547
+FSR_FRAMEGENERATION_MEASURE path=metalfx-hudless-rect-ui pattern=0 step=4 previousMAE=0.121122 currentMAE=0.122416 midpointMAE=0.001766 endpointSeparation=0.228772
+FSR_FRAMEGENERATION_MEASURE path=metalfx-hudless-rect-ui pattern=1 step=3 previousMAE=0.119144 currentMAE=0.119163 midpointMAE=0.002373 endpointSeparation=0.214184
+FSR_FRAMEGENERATION_MEASURE path=metalfx-hudless-rect-ui pattern=1 step=4 previousMAE=0.118479 currentMAE=0.120384 midpointMAE=0.003812 endpointSeparation=0.216240
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-hudless-rect-ui intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=native-distortion-fallback id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=native-distortion-fallback pattern=0 step=3 previousMAE=0.121589 currentMAE=0.121609 midpointMAE=0.000238 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=native-distortion-fallback pattern=0 step=4 previousMAE=0.121574 currentMAE=0.121574 midpointMAE=0.000242 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=native-distortion-fallback pattern=1 step=3 previousMAE=0.120159 currentMAE=0.120143 midpointMAE=0.000233 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=native-distortion-fallback pattern=1 step=4 previousMAE=0.120094 currentMAE=0.120086 midpointMAE=0.000238 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=native-distortion-fallback intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-display-jitter id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-display-jitter pattern=0 step=3 previousMAE=0.121593 currentMAE=0.121605 midpointMAE=0.000372 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=metalfx-display-jitter pattern=0 step=4 previousMAE=0.121580 currentMAE=0.121576 midpointMAE=0.000361 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=metalfx-display-jitter pattern=1 step=3 previousMAE=0.120183 currentMAE=0.120163 midpointMAE=0.000345 endpointSeparation=0.215402
+FSR_FRAMEGENERATION_MEASURE path=metalfx-display-jitter pattern=1 step=4 previousMAE=0.120114 currentMAE=0.120116 midpointMAE=0.000341 endpointSeparation=0.215256
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-display-jitter intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-pq id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-pq pattern=0 step=3 previousMAE=0.121890 currentMAE=0.121982 midpointMAE=0.002588 endpointSeparation=0.228555
+FSR_FRAMEGENERATION_MEASURE path=metalfx-pq pattern=0 step=4 previousMAE=0.121837 currentMAE=0.121907 midpointMAE=0.002616 endpointSeparation=0.228492
+FSR_FRAMEGENERATION_MEASURE path=metalfx-pq pattern=1 step=3 previousMAE=0.120542 currentMAE=0.120466 midpointMAE=0.002564 endpointSeparation=0.216098
+FSR_FRAMEGENERATION_MEASURE path=metalfx-pq pattern=1 step=4 previousMAE=0.120368 currentMAE=0.120502 midpointMAE=0.002571 endpointSeparation=0.215952
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-pq intermediates=4
+FSR_FRAMEGENERATION_PROVIDER path=metalfx-scrgb id=0x5941474647000001 name=Yaagl automatic frame generation (MetalFX or native FSR)
+FSR_FRAMEGENERATION_MEASURE path=metalfx-scrgb pattern=0 step=3 previousMAE=0.121587 currentMAE=0.121603 midpointMAE=0.000397 endpointSeparation=0.227901
+FSR_FRAMEGENERATION_MEASURE path=metalfx-scrgb pattern=0 step=4 previousMAE=0.121563 currentMAE=0.121561 midpointMAE=0.000414 endpointSeparation=0.227850
+FSR_FRAMEGENERATION_MEASURE path=metalfx-scrgb pattern=1 step=3 pr0024:fixme:thread:set_native_thread_name setting other thread name not supported
+eviousMAE=0.120174 currentMAE=0.120154 midpointMAE=0.000385 endpointSeparation=0.215399
+FSR_FRAMEGENERATION_MEASURE path=metalfx-scrgb pattern=1 step=4 previousMAE=0.120101 currentMAE=0.120106 midpointMAE=0.000384 endpointSeparation=0.215254
+FSR_FRAMEGENERATION_PATH_PASS path=metalfx-scrgb intermediates=4
+FSR_FRAMEGENERATION_MEASURE path=swapchain pattern=0 step=73 previousMAE=0.138590 currentMAE=0.135848 midpointMAE=0.027356 endpointSeparation=0.227948
+FSR_FRAMEGENERATION_MEASURE path=swapchain pattern=0 step=74 previousMAE=0.139945 currentMAE=0.134935 midpointMAE=0.028213 endpointSeparation=0.227855
+FSR_FRAMEGENERATION_MEASURE path=swapchain pattern=0 step=75 previousMAE=0.139308 currentMAE=0.132999 midpointMAE=0.026265 endpointSeparation=0.227900
+FSR_FRAMEGENERATION_MEASURE path=swapchain pattern=0 step=76 previousMAE=0.136664 currentMAE=0.132772 midpointMAE=0.024597 endpointSeparation=0.227849
+FSR_FRAMEGENERATION_MEASURE path=swapchain pattern=0 step=77 previousMAE=0.137142 currentMAE=0.133694 midpointMAE=0.025620 endpointSeparation=0.227844
+FSR_FRAMEGENERATION_PATH_PASS path=swapchain presents=78 interpolationCallbacks=8 successfulDispatches=8 dispatchedGeneratedFrames=8
+FSR_FRAMEGENERATION_D3D12_PASS builtin=4 cameraV1Absent=4 preselectionRejections=4 native=4 hudlessRectUi=4 distortionFallback=4 displayJitter=4 pq=4 scrgb=4 finiteDepthReversed=4 swapchainUiReadback=3

@@ -331,6 +331,9 @@ struct ScalerGeneration {
     MTLTextureUsage outputUsage = MTLTextureUsageUnknown;
     MTLTextureUsage reactiveUsage = MTLTextureUsageUnknown;
     bool generationFresh = true;
+    bool hasLastInputContent = false;
+    NSUInteger lastInputContentWidth = 0;
+    NSUInteger lastInputContentHeight = 0;
     std::mutex encodeMutex;
 
     ~ScalerGeneration() {
@@ -598,6 +601,12 @@ bool validateFrameTextures(const Feature::Impl& feature, const FrameInfo& frame,
         setError(error, ErrorCode::InvalidFrame, "MetalFX dynamic content/output dimensions are inconsistent with the feature");
         return false;
     }
+    if (frame.inputContent.width > feature.create.input.width ||
+        frame.inputContent.height > feature.create.input.height) {
+        setError(error, ErrorCode::InvalidFrame,
+                 "MetalFX active input content exceeds the feature render capacity");
+        return false;
+    }
     if (frame.colorRect.width != frame.inputContent.width ||
         frame.colorRect.height != frame.inputContent.height ||
         frame.depthRect.width != frame.inputContent.width ||
@@ -752,13 +761,23 @@ bool ensureFsrPipelines(Feature::Impl& feature, Error* error) noexcept {
     return true;
 }
 
+bool exactDescriptorInput(id<MTLTexture> texture, const Rect& rect,
+                           NSUInteger activeWidth, NSUInteger activeHeight,
+                           NSUInteger capacityWidth, NSUInteger capacityHeight,
+                           MTLTextureUsage usage) noexcept {
+    return texture && rect.x == 0 && rect.y == 0 &&
+           rect.width == activeWidth && rect.height == activeHeight &&
+           texture.width == capacityWidth && texture.height == capacityHeight &&
+           hasUsage(texture, usage);
+}
+
 bool generationMatches(const ScalerGeneration& generation, const FrameInfo& frame,
                        id<MTLTexture> color, id<MTLTexture> depth,
                        id<MTLTexture> motion, id<MTLTexture> output,
                        id<MTLTexture> reactive, const FrameOperations& operations,
                        const TemporalOutputLayout& temporal) noexcept {
-    if (generation.inputCapacityWidth != frame.inputContent.width ||
-        generation.inputCapacityHeight != frame.inputContent.height ||
+    if (frame.inputContent.width > generation.inputCapacityWidth ||
+        frame.inputContent.height > generation.inputCapacityHeight ||
         generation.colorFormat != (operations.colorTransfer == ColorTransfer::Linear
                                       ? color.pixelFormat : linearFormat(color.pixelFormat)) ||
         generation.depthFormat != depth.pixelFormat ||
@@ -791,6 +810,29 @@ std::shared_ptr<ScalerGeneration> ensureScaler(Feature::Impl& feature,
                           operations, temporal))
         return feature.currentGeneration;
 
+    NSUInteger inputCapacityWidth = frame.inputContent.width;
+    NSUInteger inputCapacityHeight = frame.inputContent.height;
+    if (feature.currentGeneration) {
+        inputCapacityWidth = std::max(inputCapacityWidth,
+                                      feature.currentGeneration->inputCapacityWidth);
+        inputCapacityHeight = std::max(inputCapacityHeight,
+                                       feature.currentGeneration->inputCapacityHeight);
+    }
+    const auto supportedCapacityScale = [&](NSUInteger width, NSUInteger height) noexcept {
+        const float scaleX = static_cast<float>(temporal.width) / static_cast<float>(width);
+        const float scaleY = static_cast<float>(temporal.height) / static_cast<float>(height);
+        return finite(scaleX) && finite(scaleY) &&
+               scaleX >= feature.minScale && scaleX <= feature.maxScale &&
+               scaleY >= feature.minScale && scaleY <= feature.maxScale;
+    };
+    // Keep only a high-water extent observed by this feature. If the componentwise
+    // high-water would make this descriptor scale unsupported after an output cap
+    // or ratio change, fall back to the current frame's valid exact extent.
+    if (!supportedCapacityScale(inputCapacityWidth, inputCapacityHeight)) {
+        inputCapacityWidth = frame.inputContent.width;
+        inputCapacityHeight = frame.inputContent.height;
+    }
+
     @try {
         std::shared_ptr<ScalerGeneration> generation;
         try {
@@ -808,10 +850,11 @@ std::shared_ptr<ScalerGeneration> ensureScaler(Feature::Impl& feature,
         descriptor.outputTextureFormat =
             (operations.colorTransfer != ColorTransfer::Linear || operations.sharpening)
                 ? linearFormat(output.pixelFormat) : output.pixelFormat;
-        // MetalFX texture dimensions must match the descriptor. Larger FSR backing
-        // capacities are normalized into exact active-extent textures per execution.
-        descriptor.inputWidth = frame.inputContent.width;
-        descriptor.inputHeight = frame.inputContent.height;
+        // MetalFX requires bound textures to match these exact dimensions. Dynamic
+        // content lets one generation serve smaller active extents; any smaller
+        // source texture is staged into this generation's exact capacity.
+        descriptor.inputWidth = inputCapacityWidth;
+        descriptor.inputHeight = inputCapacityHeight;
         descriptor.outputWidth = temporal.width;
         descriptor.outputHeight = temporal.height;
         descriptor.autoExposureEnabled = feature.create.autoExposure();
@@ -853,8 +896,8 @@ std::shared_ptr<ScalerGeneration> ensureScaler(Feature::Impl& feature,
             return {};
         }
         generation->scaler = scaler; // new factory returns +1
-        generation->inputCapacityWidth = frame.inputContent.width;
-        generation->inputCapacityHeight = frame.inputContent.height;
+        generation->inputCapacityWidth = inputCapacityWidth;
+        generation->inputCapacityHeight = inputCapacityHeight;
         generation->colorFormat = operations.colorTransfer == ColorTransfer::Linear
                                       ? color.pixelFormat : linearFormat(color.pixelFormat);
         generation->depthFormat = depth.pixelFormat;
@@ -915,8 +958,8 @@ std::shared_ptr<ExecutionLease::Impl> makeLease(const PreparedFrame::Impl& frame
             lease->linearColor = makeScratchTexture(
                 feature.device, frame.color, generation.colorFormat,
                 generation.colorUsage | MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite,
-                @".YAAGL.FSR.LinearColor", frame.frame.inputContent.width,
-                frame.frame.inputContent.height);
+                @".YAAGL.FSR.LinearColor", generation.inputCapacityWidth,
+                generation.inputCapacityHeight);
             if (!lease->linearColor) {
                 setError(error, ErrorCode::ResourceCreationFailed,
                          "failed to allocate exact-size FSR linear input texture");
@@ -925,24 +968,27 @@ std::shared_ptr<ExecutionLease::Impl> makeLease(const PreparedFrame::Impl& frame
         } else if (frame.needsColorStaging) {
             lease->stagedColor = makeScratchTexture(
                 feature.device, frame.color, frame.color.pixelFormat, generation.colorUsage,
-                @".YAAGL.MetalFX.ActiveColor", frame.frame.inputContent.width,
-                frame.frame.inputContent.height);
+                @".YAAGL.MetalFX.ActiveColor", generation.inputCapacityWidth,
+                generation.inputCapacityHeight);
         }
         if (frame.needsDepthStaging)
             lease->stagedDepth = makeScratchTexture(
                 feature.device, frame.depth, frame.depth.pixelFormat, generation.depthUsage,
-                @".YAAGL.MetalFX.ActiveDepth", frame.frame.inputContent.width,
-                frame.frame.inputContent.height);
+                @".YAAGL.MetalFX.ActiveDepth", generation.inputCapacityWidth,
+                generation.inputCapacityHeight);
         if (frame.needsMotionStaging)
             lease->stagedMotion = makeScratchTexture(
                 feature.device, frame.motion, frame.motion.pixelFormat, generation.motionUsage,
-                @".YAAGL.MetalFX.ActiveMotion", frame.scalerMotionRect.width,
-                frame.scalerMotionRect.height);
+                @".YAAGL.MetalFX.ActiveMotion",
+                feature.create.lowResolutionMotionVectors() ? generation.inputCapacityWidth
+                                                            : frame.scalerMotionRect.width,
+                feature.create.lowResolutionMotionVectors() ? generation.inputCapacityHeight
+                                                            : frame.scalerMotionRect.height);
         if (frame.operations.combineCompositionMask) {
             lease->combinedMask = makeMaskTexture(feature.device,
                                                   frame.reactive ? frame.reactive : frame.composition,
-                                                  frame.frame.inputContent.width,
-                                                  frame.frame.inputContent.height);
+                                                  generation.inputCapacityWidth,
+                                                  generation.inputCapacityHeight);
             if (!lease->combinedMask ||
                 !hasUsage(lease->combinedMask, generation.reactiveUsage)) {
                 setError(error, ErrorCode::ResourceCreationFailed,
@@ -953,7 +999,7 @@ std::shared_ptr<ExecutionLease::Impl> makeLease(const PreparedFrame::Impl& frame
             lease->stagedReactive = makeScratchTexture(
                 feature.device, frame.reactive, frame.reactive.pixelFormat,
                 generation.reactiveUsage, @".YAAGL.MetalFX.ActiveReactive",
-                frame.frame.inputContent.width, frame.frame.inputContent.height);
+                generation.inputCapacityWidth, generation.inputCapacityHeight);
         }
         if ((!transfer && frame.needsColorStaging && !lease->stagedColor) ||
             (frame.needsDepthStaging && !lease->stagedDepth) ||
@@ -1206,6 +1252,54 @@ bool encodeFsrPassLegacy(
     }
 }
 
+template <typename Encoder, typename Barrier>
+void extendTextureEdges(Encoder encoder, id<MTLTexture> texture,
+                        NSUInteger activeWidth, NSUInteger activeHeight,
+                        Barrier barrier) {
+    const NSUInteger capacityWidth = texture.width;
+    const NSUInteger capacityHeight = texture.height;
+    bool edgeCopyEncoded = false;
+    const auto copy = [&](NSUInteger sourceX, NSUInteger sourceY,
+                          NSUInteger width, NSUInteger height,
+                          NSUInteger destinationX, NSUInteger destinationY) {
+        if (edgeCopyEncoded) barrier();
+        [encoder copyFromTexture:texture sourceSlice:0 sourceLevel:0
+                    sourceOrigin:MTLOriginMake(sourceX, sourceY, 0)
+                      sourceSize:MTLSizeMake(width, height, 1)
+                       toTexture:texture destinationSlice:0 destinationLevel:0
+               destinationOrigin:MTLOriginMake(destinationX, destinationY, 0)];
+        edgeCopyEncoded = true;
+    };
+    if (activeWidth < capacityWidth) {
+        copy(activeWidth - 1, 0, 1, activeHeight, activeWidth, 0);
+        NSUInteger paddedWidth = 1;
+        while (activeWidth + paddedWidth < capacityWidth) {
+            const NSUInteger width = std::min(paddedWidth,
+                                               capacityWidth - activeWidth - paddedWidth);
+            copy(activeWidth, 0, width, activeHeight, activeWidth + paddedWidth, 0);
+            paddedWidth += width;
+        }
+    }
+    if (activeHeight < capacityHeight) {
+        copy(0, activeHeight - 1, capacityWidth, 1, 0, activeHeight);
+        NSUInteger paddedHeight = 1;
+        while (activeHeight + paddedHeight < capacityHeight) {
+            const NSUInteger height = std::min(paddedHeight,
+                                                capacityHeight - activeHeight - paddedHeight);
+            copy(0, activeHeight, capacityWidth, height, 0, activeHeight + paddedHeight);
+            paddedHeight += height;
+        }
+    }
+}
+
+// Metal 4 may overlap blits in one pass; edge copies consume earlier copy output.
+void barrierBetweenMetal4Blits(id<MTL4ComputeCommandEncoder> encoder)
+    API_AVAILABLE(macos(26.0)) {
+    [encoder barrierAfterEncoderStages:MTLStageBlit
+                  beforeEncoderStages:MTLStageBlit
+                    visibilityOptions:MTL4VisibilityOptionDevice];
+}
+
 bool encodeInputCopiesMetal4(const PreparedFrame::Impl& frame, ExecutionLease::Impl& lease,
                             id<MTL4CommandBuffer> command, id<MTLFence> fence)
                             API_AVAILABLE(macos(26.0)) {
@@ -1216,6 +1310,7 @@ bool encodeInputCopiesMetal4(const PreparedFrame::Impl& frame, ExecutionLease::I
     if (!encoder) return false;
     @try {
         [encoder waitForFence:fence beforeEncoderStages:MTLStageBlit];
+        const auto barrier = [&] { barrierBetweenMetal4Blits(encoder); };
         const auto copy = [&](id<MTLTexture> source, id<MTLTexture> destination,
                               const Rect& rect) {
             if (!destination) return;
@@ -1224,6 +1319,9 @@ bool encodeInputCopiesMetal4(const PreparedFrame::Impl& frame, ExecutionLease::I
                           sourceSize:MTLSizeMake(rect.width, rect.height, 1)
                            toTexture:destination destinationSlice:0 destinationLevel:0
                    destinationOrigin:MTLOriginMake(0, 0, 0)];
+            if (rect.width < destination.width || rect.height < destination.height)
+                barrier();
+            extendTextureEdges(encoder, destination, rect.width, rect.height, barrier);
         };
         copy(frame.color, lease.stagedColor, frame.frame.colorRect);
         copy(frame.depth, lease.stagedDepth, frame.frame.depthRect);
@@ -1255,6 +1353,7 @@ bool encodeInputCopiesLegacy(const PreparedFrame::Impl& frame, ExecutionLease::I
                           sourceSize:MTLSizeMake(rect.width, rect.height, 1)
                            toTexture:destination destinationSlice:0 destinationLevel:0
                    destinationOrigin:MTLOriginMake(0, 0, 0)];
+            extendTextureEdges(encoder, destination, rect.width, rect.height, [] {});
         };
         copy(frame.color, lease.stagedColor, frame.frame.colorRect);
         copy(frame.depth, lease.stagedDepth, frame.frame.depthRect);
@@ -1304,6 +1403,63 @@ bool encodeFsrPreLegacy(const PreparedFrame::Impl& frame, ExecutionLease::Impl& 
             return false;
     }
     return true;
+}
+
+bool encodeFsrInputPaddingMetal4(const PreparedFrame::Impl& frame,
+                               ExecutionLease::Impl& lease,
+                               id<MTL4CommandBuffer> command,
+                               id<MTLFence> fence) API_AVAILABLE(macos(26.0)) {
+    const NSUInteger width = frame.frame.inputContent.width;
+    const NSUInteger height = frame.frame.inputContent.height;
+    const bool padLinearColor = lease.linearColor &&
+        (lease.linearColor.width != width || lease.linearColor.height != height);
+    const bool padCombinedMask = lease.combinedMask &&
+        (lease.combinedMask.width != width || lease.combinedMask.height != height);
+    if (!padLinearColor && !padCombinedMask) return true;
+    id<MTL4ComputeCommandEncoder> encoder = [command computeCommandEncoder];
+    if (!encoder) return false;
+    @try {
+        [encoder waitForFence:fence beforeEncoderStages:MTLStageBlit];
+        const auto barrier = [&] { barrierBetweenMetal4Blits(encoder); };
+        if (padLinearColor)
+            extendTextureEdges(encoder, lease.linearColor, width, height, barrier);
+        if (padCombinedMask)
+            extendTextureEdges(encoder, lease.combinedMask, width, height, barrier);
+        [encoder updateFence:fence afterEncoderStages:MTLStageBlit];
+        [encoder endEncoding];
+        return true;
+    } @catch (id) {
+        @try { [encoder endEncoding]; } @catch (id) {}
+        return false;
+    }
+}
+
+bool encodeFsrInputPaddingLegacy(const PreparedFrame::Impl& frame,
+                                ExecutionLease::Impl& lease,
+                                id<MTLCommandBuffer> command,
+                                id<MTLFence> fence) {
+    const NSUInteger width = frame.frame.inputContent.width;
+    const NSUInteger height = frame.frame.inputContent.height;
+    const bool padLinearColor = lease.linearColor &&
+        (lease.linearColor.width != width || lease.linearColor.height != height);
+    const bool padCombinedMask = lease.combinedMask &&
+        (lease.combinedMask.width != width || lease.combinedMask.height != height);
+    if (!padLinearColor && !padCombinedMask) return true;
+    id<MTLBlitCommandEncoder> encoder = [command blitCommandEncoder];
+    if (!encoder) return false;
+    @try {
+        [encoder waitForFence:fence];
+        if (padLinearColor)
+            extendTextureEdges(encoder, lease.linearColor, width, height, [] {});
+        if (padCombinedMask)
+            extendTextureEdges(encoder, lease.combinedMask, width, height, [] {});
+        [encoder updateFence:fence];
+        [encoder endEncoding];
+        return true;
+    } @catch (id) {
+        @try { [encoder endEncoding]; } @catch (id) {}
+        return false;
+    }
 }
 
 bool encodeFsrFinishMetal4(const PreparedFrame::Impl& frame, ExecutionLease::Impl& lease,
@@ -1533,19 +1689,32 @@ std::shared_ptr<const PreparedFrame> Feature::prepare(
             frame->scalerMotionRect.height = temporal.height;
         }
         const Rect activeInput{0, 0, info.inputContent.width, info.inputContent.height};
+        const bool smallerThanInputCapacity =
+            activeInput.width != generation->inputCapacityWidth ||
+            activeInput.height != generation->inputCapacityHeight;
         frame->needsColorStaging = operations.colorTransfer == ColorTransfer::Linear &&
-            !exactTexture(color, info.colorRect, activeInput.width, activeInput.height,
-                          generation->colorUsage);
-        frame->needsDepthStaging =
-            !exactTexture(depth, info.depthRect, activeInput.width, activeInput.height,
-                          generation->depthUsage);
-        frame->needsMotionStaging =
-            !exactTexture(motion, frame->scalerMotionRect,
-                          frame->scalerMotionRect.width, frame->scalerMotionRect.height,
-                          generation->motionUsage);
+            (smallerThanInputCapacity ||
+             !exactDescriptorInput(color, info.colorRect, activeInput.width, activeInput.height,
+                                   generation->inputCapacityWidth, generation->inputCapacityHeight,
+                                   generation->colorUsage));
+        frame->needsDepthStaging = smallerThanInputCapacity ||
+            !exactDescriptorInput(depth, info.depthRect, activeInput.width, activeInput.height,
+                                  generation->inputCapacityWidth, generation->inputCapacityHeight,
+                                  generation->depthUsage);
+        frame->needsMotionStaging = impl_->create.lowResolutionMotionVectors()
+            ? (smallerThanInputCapacity ||
+               !exactDescriptorInput(motion, frame->scalerMotionRect,
+                                     activeInput.width, activeInput.height,
+                                     generation->inputCapacityWidth, generation->inputCapacityHeight,
+                                     generation->motionUsage))
+            : !exactTexture(motion, frame->scalerMotionRect,
+                            frame->scalerMotionRect.width, frame->scalerMotionRect.height,
+                            generation->motionUsage);
         frame->needsReactiveStaging = reactive && !operations.combineCompositionMask &&
-            !exactTexture(reactive, info.reactiveRect, activeInput.width, activeInput.height,
-                          generation->reactiveUsage);
+            (smallerThanInputCapacity ||
+             !exactDescriptorInput(reactive, info.reactiveRect, activeInput.width, activeInput.height,
+                                   generation->inputCapacityWidth, generation->inputCapacityHeight,
+                                   generation->reactiveUsage));
         frame->needsOutputShadow = temporal.capped ||
                                    operations.colorTransfer != ColorTransfer::Linear ||
                                    operations.sharpening ||
@@ -1621,7 +1790,11 @@ bool PreparedFrame::encode(void* commandBuffer, void* fencePointer,
         ScalerGeneration& generation = *impl_->generation;
         std::lock_guard<std::mutex> lock(generation.encodeMutex);
         const bool generationInitialized = !generation.generationFresh;
-        const bool effectiveReset = impl_->frame.resetHistory.value || generation.generationFresh;
+        const bool inputExtentChanged = generation.hasLastInputContent &&
+            (generation.lastInputContentWidth != impl_->frame.inputContent.width ||
+             generation.lastInputContentHeight != impl_->frame.inputContent.height);
+        const bool effectiveReset = impl_->frame.resetHistory.value || generation.generationFresh ||
+                                    inputExtentChanged;
         lease->effectiveReset = effectiveReset;
         lease->generationInitialized = generationInitialized;
         lease->scaler = reinterpret_cast<void*>(generation.scaler);
@@ -1675,6 +1848,11 @@ bool PreparedFrame::encode(void* commandBuffer, void* fencePointer,
                                  "failed to encode FSR preprocessing on Metal4");
                         return false;
                     }
+                    if (!encodeFsrInputPaddingMetal4(*impl_, *lease, command, lease->fence)) {
+                        setError(error, ErrorCode::EncodeFailed,
+                                 "failed to extend processed MetalFX input padding on Metal4");
+                        return false;
+                    }
                     configureScalerForFrame(feature, generation, *impl_, *lease, lease->fence,
                                             effectiveReset);
                     beginObservation();
@@ -1722,6 +1900,11 @@ bool PreparedFrame::encode(void* commandBuffer, void* fencePointer,
                              "failed to encode FSR preprocessing on legacy Metal");
                     return false;
                 }
+                if (!encodeFsrInputPaddingLegacy(*impl_, *lease, command, lease->fence)) {
+                    setError(error, ErrorCode::EncodeFailed,
+                             "failed to extend processed MetalFX input padding on legacy Metal");
+                    return false;
+                }
                 configureScalerForFrame(feature, generation, *impl_, *lease, lease->fence,
                                         effectiveReset);
                 beginObservation();
@@ -1743,6 +1926,9 @@ bool PreparedFrame::encode(void* commandBuffer, void* fencePointer,
             return false;
         }
 
+        generation.lastInputContentWidth = impl_->frame.inputContent.width;
+        generation.lastInputContentHeight = impl_->frame.inputContent.height;
+        generation.hasLastInputContent = true;
         generation.generationFresh = false;
         observation.completed();
         return true;
