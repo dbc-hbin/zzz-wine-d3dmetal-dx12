@@ -2,11 +2,13 @@
 
 분석일: 2026-09-23. 대상 소스: `66a4c55`까지의 배포 변경과 작업 트리의 HUD 수정.
 
+이 문서의 “현재”와 실행 helper는 분석 당시 배포물 기준이다. 후속 소스 변경은 아래에 따로 적으며, 측정값을 새 런타임의 결과로 해석하지 않는다.
+
 ## 결론
 
 1. **FSR 활성 경로의 성능 차이는 격리 D3D12 실행에서 재현했다.** 같은 현재 런타임에서 원본 AMD FSR 3.1.5는 dispatch→fence 완료 중앙값 4.716ms, MetalFX 번역은 8.014ms였다. 차이는 +3.298ms(+69.9%). 이 수치는 합성 입력의 작업 완료 시간이지 게임 FPS나 순수 GPU 시간이 아니다.
 2. **Wine 코어 바이너리·빌드 옵션이 바뀌어서 생긴 회귀라는 근거는 없다.** 공식 배포 압축파일 전체 비교에서 실행 엔진, wineserver, ntdll, macdrv, win32u, D3D DLL 및 주요 의존 파일은 동일했다.
-3. **렌더러 선택 조건도 바뀌었다.** v1.0.5는 해당 런타임에 DX12 인자를 강제했고, 현재 설치기는 런처의 DX12 설정을 따른다. 기존 OFF 설정의 마이그레이션은 없다. 같은 저장 설정이 같은 렌더러 실행을 보장하지 않는다.
+3. **렌더러 선택 조건도 바뀌었다.** v1.0.5는 해당 런타임에 DX12 인자를 강제했고, 분석 당시 설치기는 런처의 DX12 설정을 따르며 마이그레이션은 없었다. 후속 소스는 저장 키가 없는 정확한 v1.0.5 대상만 마이그레이션하고 명시적 OFF는 보존한다.
 4. GPU 식별 변경, NGX 모듈 제거, FSR builtin 강제 선택은 별도 비교 조건이다. 실제 테스터의 이전 DLSS 사용 여부·자동 프리셋 변경은 관측하지 않았다.
 5. HUD 강제 ON 버그는 소스에서 수정하고 자식 프로세스 환경변수 회귀 테스트로 검증했다. 기존 배포 압축파일·설치 런타임은 변경하지 않았다.
 
@@ -19,6 +21,7 @@
 - **DX12 마이그레이션:** 정확한 v1.0.5 강제 DX12 predicate가 있는 frontend에서, 당시 대상 runtime ID·D3DMetal backend·DX12 지원이 모두 일치하고 저장된 `config_use_d3d12` 키가 없을 때만 ON을 저장한다. 기본 OFF는 자동 저장되지 않았다는 실제 setting lifecycle을 확인했다. 저장된 false는 사용자의 OFF와 구분할 근거가 없어 그대로 보존한다. 다른 지원 runtime, 새 frontend, 이미 설정 기반인 v1.1.x frontend는 추측으로 켜지 않는다. storage 열거·읽기·쓰기 오류에서는 OFF를 유지한다.
 - **검증:** 새 마이그레이션 회귀는 수정 전에 실패했고 `node --test scripts/test-dx12-launch-regression.mjs`는 수정 후 4/4 통과했다. normal/Steam 인자 전달, 명시적 OFF, 비대상 지원 runtime, 반복 변환·저장 상태를 포함한다.
 - **명시적 SR 선택:** 새 staging helper는 `YAAGL_FSR_UPSCALER=metalfx|native`를 받는다. 미설정·빈 값의 기본은 MetalFX이고 FG 정책은 바꾸지 않는다. 잘못된 값은 Wine 실행 전에 거부한다. 전체 wrapper의 native 선택과 잘못된 값의 child 실행 차단 회귀는 수정 전 실패, 수정 후 기존 HUD/relocation 검사와 함께 4/4 통과했다.
+- **이후 통합:** 현재 소스는 이 선택을 `scripts/wine-launch-wrapper.sh`에서 직접 처리하고 schema 4 staging에서 helper를 제거한다. 로컬 `release-v1.1.3-local` 패키지에만 반영됐으며 기존 배포 archive는 그대로다.
 - **실제 provider 확인:** canonical 이름의 게임 DLL을 사용한 격리 D3D12 실행에서 native `0xf5a5ca1e00c01005`와 builtin MetalFX `0x4d46580000000001`을 각각 확인했고 GPU 출력 readback까지 통과했다. [native raw](evidence/2026-09-23-regression-fixes/sr-cost/canonical-native-auto-off.stdout), [MetalFX raw](evidence/2026-09-23-regression-fixes/sr-cost/canonical-metalfx-auto-off.stdout). 이것은 선택 경로의 검증이며 SR 성능 차이가 해결됐다는 증거가 아니다.
 
 사용자 지시에 따라 최종 배포물 반영 검사는 회귀·성능 수정 이후 다음 패키징 단계로 미룬다. 설치된 게임·런타임과 배포 archive는 변경하지 않았다.
@@ -149,7 +152,7 @@ RCAS 비교의 중앙값 차이는 약 2.034ms다. 순차 그룹 측정이고 sc
 | false | `-use-d3d12` 1개 | 없음 |
 | true | `-use-d3d12` 1개 | `-use-d3d12` 1개 |
 
-일반 batch와 Steam-patch 경로 모두 동일했다. 현재는 config 설정과 supportsD3d12 capability를 따른다. 설치기는 기존 false 설정을 true로 바꾸지 않는다.
+일반 batch와 Steam-patch 경로 모두 동일했다. 분석 당시 설치기는 config 설정과 supportsD3d12 capability를 따르고 마이그레이션하지 않았다. 후속 소스에서도 저장된 false는 true로 바꾸지 않지만, 정확한 구버전 대상의 키 부재는 ON으로 이관한다.
 
 조건부 영향: 이전에 false여도 DX12를 쓰던 사용자는 업데이트 후 다른 렌더러로 실행될 수 있다. 실제 테스터의 argv·저장 설정은 관측하지 않았으므로 FPS 원인으로 단정하지 않는다.
 

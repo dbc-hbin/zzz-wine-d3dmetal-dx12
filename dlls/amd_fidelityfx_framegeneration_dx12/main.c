@@ -189,7 +189,6 @@ struct fg_context
 
     struct stable_swapchain *swapchain;
     struct callback_binding *binding;
-    FfxFrameGenerationConfig swapchain_config;
     struct ffxConfigureDescFrameGeneration native_config;
     BOOL native_config_valid;
 
@@ -1184,7 +1183,6 @@ static ffxReturnCode_t detach_swapchain(struct fg_context *context)
         if (native_result != FFX_API_RETURN_OK) result = native_result;
     }
     context->enabled = FALSE;
-    memset(&context->swapchain_config, 0, sizeof(context->swapchain_config));
     memset(&context->native_config, 0, sizeof(context->native_config));
 
     return result;
@@ -1348,7 +1346,6 @@ static ffxReturnCode_t configure_frame_generation(
         {
             store_native_config(context, desc);
             context->enabled = desc->frameGenerationEnabled;
-            build_swapchain_config(&context->swapchain_config, desc, NULL);
         }
         return result;
     }
@@ -1394,7 +1391,6 @@ static ffxReturnCode_t configure_frame_generation(
      */
     swapchain->lpVtbl->set_config(swapchain, &config);
     context->binding = binding;
-    context->swapchain_config = config;
     context->enabled = desc->frameGenerationEnabled;
     store_native_config(context, desc);
 

@@ -7,8 +7,7 @@
   "sourceTagHint": "wine-11.17",
   "notes": [
     "Ordered source quilt against the immutable sourcePin; all source changes are carried by these patches.",
-    "scripts/build-wine-p3.sh recomputes patch sha256 into build/wine-p3/provenance.json at install time.",
-    "prepared.marker is gated: nonempty series files + hash equality; mark-prepared requires git apply --reverse --check.",
+    "P3 preparation is an external input; scripts/build-wine-tuned.sh consumes the prepared source, host, dependencies, and provenance from WINE_P3_ROOT.",
     "Do not strip PKG_CONFIG_LIBDIR from upstream configure; regenerate top-level configure only via Main if needed.",
     "server/window.c CW0009 is HostSync (not GraphicsBridge)."
   ],

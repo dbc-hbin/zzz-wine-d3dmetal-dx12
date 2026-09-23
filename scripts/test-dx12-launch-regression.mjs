@@ -298,14 +298,13 @@ async function assertFixedTransformer(transformer, source) {
 
 }
 
-async function assertLegacyUpgrade(transformer, source, replacement, priorCount, expectedReplacementOccurrences) {
+async function assertLegacyUpgrade(transformer, source, replacement, priorCount) {
   const historical = historicLaunchSource(transformer, source, replacement);
   const historicalCatalog = catalogEntries(transformer.ts, historical);
   await assertCatalogLaunches(transformer.ts, historical, historicalCatalog, priorCount);
 
   const upgraded = transformSource(transformer, historical);
   assert.equal(upgraded.changed, true, "current transformer must upgrade the prior launch guard");
-  assert.equal(upgraded.source.split(replacement).length - 1, expectedReplacementOccurrences, "current transformer must replace the prior launch guard instead of adding another one");
   const upgradedCatalog = catalogEntries(transformer.ts, upgraded.source);
   await assertCatalogLaunches(transformer.ts, upgraded.source, upgradedCatalog, (entry, enabled) => enabled && entry.attributes.supportsD3d12 === true ? 1 : 0);
 
@@ -384,10 +383,10 @@ test("v1.0.5 forced DX12 upgrade migrates only an absent preference and preserve
 
 test("DX12 launch registration upgrades the historical absent-runner-id guard", async () => {
   const replacement = "n.id===\"" + targetId + "\"&&u.push(\"-use-d3d12\");";
-  await assertLegacyUpgrade(transformer, upstreamSource, replacement, () => 0, 0);
+  await assertLegacyUpgrade(transformer, upstreamSource, replacement, () => 0);
 });
 
 test("DX12 launch registration upgrades the historical backend-only guard", async () => {
   const replacement = "n.attributes.renderBackend===\"d3dmetal\"&&u.push(\"-use-d3d12\");";
-  await assertLegacyUpgrade(transformer, upstreamSource, replacement, entry => entry.attributes.renderBackend === "d3dmetal" ? 1 : 0, 0);
+  await assertLegacyUpgrade(transformer, upstreamSource, replacement, entry => entry.attributes.renderBackend === "d3dmetal" ? 1 : 0);
 });

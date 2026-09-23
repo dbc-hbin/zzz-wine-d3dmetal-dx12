@@ -98,7 +98,6 @@ struct State {
     std::array<CachedBackend, 3> inactiveBackends{};
     std::size_t nextEviction = 0;
     bool retired = false;
-    std::uint32_t debugLevel = 0;
 };
 std::unordered_map<std::uint64_t, std::shared_ptr<State>> gContexts;
 
@@ -249,8 +248,6 @@ std::uint32_t configure(yaagl_fsr_configure_packet& packet) {
     if (!packet.header.context) return kOk;
     auto state = find(packet.header.context);
     if (!state) return kParameter;
-    std::lock_guard lock(state->mutex);
-    state->debugLevel = packet.debug_level;
     return kOk;
 }
 
