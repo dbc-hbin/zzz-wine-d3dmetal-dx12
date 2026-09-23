@@ -124,12 +124,7 @@ private struct CLIError: LocalizedError {
 private func runCLI(_ options: CLIOptions) -> Never {
     print("=== Wine 11.17 ZZZ DX12 Installer (CLI Mode) ===")
     let engine = InstallerEngine()
-    if let appPath = options.appPath {
-        engine.appPath = appPath
-    }
-    if let supportPath = options.supportPath {
-        engine.supportPath = supportPath
-    }
+    engine.setPaths(appPath: options.appPath, supportPath: options.supportPath)
 
     var isDone = false
     var exitCode: Int32 = EXIT_SUCCESS

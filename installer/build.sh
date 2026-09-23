@@ -5,7 +5,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$DIR"
 
 RUNTIME_ARCHIVE="Wine 11.17 ZZZ DX12 (GPTK4.0b2 macOS26).tar.xz"
-RUNTIME_ARCHIVE_SOURCE="${RUNTIME_ARCHIVE_SOURCE:-$DIR/../build/release-v1.1.0/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz}"
+RUNTIME_ARCHIVE_SOURCE="${RUNTIME_ARCHIVE_SOURCE:-$DIR/../build/release-v1.1.1/wine-11.17-zzz-dx12-gptk4b2-macos26.tar.xz}"
 if [ ! -f "$RUNTIME_ARCHIVE_SOURCE" ]; then
     echo "Missing macOS 26 runtime archive: $RUNTIME_ARCHIVE_SOURCE" >&2
     exit 1
@@ -77,9 +77,9 @@ cat << 'PLIST' > "$APP_NAME/Contents/Info.plist"
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.1.1</string>
+    <string>1.1.2</string>
     <key>CFBundleVersion</key>
-    <string>1.1.1</string>
+    <string>1.1.2</string>
     <key>LSMinimumSystemVersion</key>
     <string>26.0</string>
     <key>NSHighResolutionCapable</key>

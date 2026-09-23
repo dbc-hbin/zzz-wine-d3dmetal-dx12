@@ -12,14 +12,18 @@ The v1.1.0 public runtime identifies its graphics adapter as **AMD Radeon RX 907
 
 1. Download [ZZZWineDX12Installer.zip](https://github.com/dbc-hbin/zzz-wine-d3dmetal-dx12/releases/latest/download/ZZZWineDX12Installer.zip).
 2. Extract it and open **`ZZZ Wine DX12 Installer.app`**.
-3. Quit Yaagl ZZZ OS, then select **`Install Wine 11.17 ZZZ DX12`**. If the same runtime is already selected, the button reads **`Reinstall / Update Wine`**.
-4. Start Yaagl ZZZ OS and select **`Wine 11.17 ZZZ DX12 (GPTK4.0b2)`** from its Wine menu.
+3. Quit Yaagl and its Wine processes. Choose your launcher under **`Yaagl Target`**, then select **`Install Wine 11.17 ZZZ DX12`**. If the same runtime is already selected, the button reads **`Reinstall / Update Wine`**.
+4. Start the selected Yaagl launcher and select **`Wine 11.17 ZZZ DX12 (GPTK4.0b2)`** from its Wine menu.
 
 The installer detects the Yaagl application and support directories, installs its bundled archive, registers the runtime, and backs up Yaagl resources, the selected Wine, and the previous runtime directory. The archive remains in Yaagl's local runtime storage for offline selection, and the installer does not require Node.js.
 
 A same-name runtime can be reinstalled. The bundled archive replaces both the cached archive and runtime directory instead of treating the matching name as proof that the files are current. If final Wine-selection activation fails, the installer restores the runtime and selection from immediately before that attempt without consuming the original restore backup. “Update” means replacing the runtime with the build bundled in the installer being run; it is not an online update check.
 
 ### Terminal installer
+
+The target picker supports **Yaagl ZZZ OS**, **Yaagl ZZZ OS DX12 Beta** (global), and **Yaagl ZZZ DX12 Beta** (CN), including the [DX12 beta release](https://github.com/dbc-hbin/yaagl-ZZZ-DX12/releases). Each target uses its own matching `~/Library/Application Support/<launcher name>` directory; installing into a beta does not replace the stable launcher's Wine. Launch a newly installed Yaagl once to create its support directory, then quit it before using the installer. Stable is selected by default when installed; otherwise an installed beta is detected.
+
+For a beta CLI install, pass `--app-path "/Applications/Yaagl ZZZ OS DX12 Beta.app"` (global) or `--app-path "/Applications/Yaagl ZZZ DX12 Beta.app"` (CN). Recognized app names infer the matching support directory; an explicit `--support-path` takes precedence for custom installations.
 
 ```bash
 ./installer/zzz-wine-installer --install \

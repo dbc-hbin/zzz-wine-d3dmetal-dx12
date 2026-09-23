@@ -12,14 +12,18 @@ v1.1.0 공개 런타임은 그래픽 어댑터를 **AMD Radeon RX 9070**(`0x1002
 
 1. [ZZZWineDX12Installer.zip](https://github.com/dbc-hbin/zzz-wine-d3dmetal-dx12/releases/latest/download/ZZZWineDX12Installer.zip)을 다운로드합니다.
 2. 압축을 풀고 **`ZZZ Wine DX12 Installer.app`**을 실행합니다.
-3. Yaagl ZZZ OS를 종료한 뒤 **`Install Wine 11.17 ZZZ DX12`**를 선택합니다. 같은 런타임이 이미 선택돼 있으면 버튼이 **`Reinstall / Update Wine`**으로 표시됩니다.
-4. Yaagl ZZZ OS를 실행하고 Wine 메뉴에서 **`Wine 11.17 ZZZ DX12 (GPTK4.0b2)`**를 선택합니다.
+3. Yaagl과 Wine 프로세스를 종료합니다. **`Yaagl Target`**에서 사용할 런처를 고른 뒤 **`Install Wine 11.17 ZZZ DX12`**를 선택합니다. 같은 런타임이 이미 선택돼 있으면 버튼이 **`Reinstall / Update Wine`**으로 표시됩니다.
+4. 선택한 Yaagl 런처를 실행하고 Wine 메뉴에서 **`Wine 11.17 ZZZ DX12 (GPTK4.0b2)`**를 선택합니다.
 
 설치 프로그램은 Yaagl 앱과 지원 디렉터리를 감지하고, 동봉 아카이브를 설치하고, 런타임을 등록하며, Yaagl 리소스·Wine 선택·이전 런타임 디렉터리를 백업합니다. 아카이브는 Yaagl의 로컬 런타임 저장소에 남아 오프라인에서도 선택할 수 있습니다. Node.js는 필요하지 않습니다.
 
 같은 이름의 런타임도 재설치할 수 있습니다. 이름이 같다는 이유로 현재 파일이라고 간주하지 않고 동봉 아카이브로 캐시와 런타임 디렉터리를 모두 교체합니다. 마지막 Wine 선택 활성화에 실패하면 최초 복원 백업을 소비하지 않고 이번 시도 직전의 런타임과 선택 상태로 되돌립니다. 여기서 “업데이트”는 실행한 설치 프로그램에 포함된 빌드로 교체한다는 뜻이며 온라인 업데이트 확인 기능이 아닙니다.
 
 ### 터미널 설치
+
+대상 선택 메뉴는 **Yaagl ZZZ OS**, **Yaagl ZZZ OS DX12 Beta**(글로벌), **Yaagl ZZZ DX12 Beta**(중국)를 지원하며 [DX12 베타 릴리즈](https://github.com/dbc-hbin/yaagl-ZZZ-DX12/releases)에도 설치할 수 있습니다. 각 대상은 별도의 `~/Library/Application Support/<런처 이름>` 폴더를 사용하므로 베타에 설치해도 일반판의 Wine은 교체하지 않습니다. Yaagl을 처음 설치했다면 한 번 실행해 지원 폴더를 만든 뒤 종료하고 설치 프로그램을 사용하세요. 일반판이 설치돼 있으면 기본 선택하며, 없으면 설치된 베타를 감지합니다.
+
+CLI에서는 글로벌 베타에 `--app-path "/Applications/Yaagl ZZZ OS DX12 Beta.app"`, 중국 베타에 `--app-path "/Applications/Yaagl ZZZ DX12 Beta.app"`를 지정합니다. 알려진 앱 이름이면 대응하는 지원 폴더를 자동 선택하며, 사용자 지정 설치에서는 명시한 `--support-path`가 우선합니다.
 
 ```bash
 ./installer/zzz-wine-installer --install \

@@ -5,6 +5,18 @@ struct ContentView: View {
     @State private var showingAlert = false
     @State private var alertTitle = ""
     @State private var alertMessage = ""
+    @State private var supportPathWasEdited = false
+
+    private var targetSelection: Binding<String> {
+        Binding(
+            get: { engine.selectedTarget?.rawValue ?? "custom" },
+            set: { value in
+                guard let target = InstallerEngine.Target(rawValue: value) else { return }
+                supportPathWasEdited = false
+                engine.selectTarget(target)
+            }
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -20,7 +32,7 @@ struct ContentView: View {
                     Text("Wine 11.17 ZZZ DX12 Installer")
                         .font(.title2)
                         .fontWeight(.bold)
-                    Text("Install and register the prebuilt D3DMetal (GPTK 4.0b2) Wine runtime for Yaagl ZZZ OS")
+                    Text("Install and register the prebuilt D3DMetal (GPTK 4.0b2) Wine runtime for Yaagl")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
@@ -37,13 +49,27 @@ struct ContentView: View {
                     // Status Card
                     GroupBox(label: Label("Environment Status", systemImage: "info.circle")) {
                         VStack(alignment: .leading, spacing: 8) {
+                            Picker("Yaagl Target", selection: targetSelection) {
+                                ForEach(InstallerEngine.Target.allCases) { target in
+                                    Text(target.title).tag(target.rawValue)
+                                }
+                                if engine.selectedTarget == nil {
+                                    Text("Custom Paths").tag("custom")
+                                }
+                            }
+                            .disabled(engine.isWorking)
+
                             HStack {
                                 Image(systemName: engine.status.yaaglAppExists ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .foregroundColor(engine.status.yaaglAppExists ? .green : .red)
                                 Text("Yaagl App:")
-                                TextField("Yaagl ZZZ OS.app path", text: $engine.appPath)
+                                TextField("Yaagl application path", text: Binding(
+                                    get: { engine.appPath },
+                                    set: { engine.setPaths(appPath: $0, supportPath: supportPathWasEdited ? engine.supportPath : nil) }
+                                ))
                                     .font(.caption)
                                     .textFieldStyle(.roundedBorder)
+                                    .disabled(engine.isWorking)
                                     .onSubmit { engine.refreshStatus() }
                                     .accessibilityLabel("Yaagl application path")
                                 Spacer()
@@ -53,9 +79,16 @@ struct ContentView: View {
                                 Image(systemName: engine.status.yaaglSupportExists ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .foregroundColor(engine.status.yaaglSupportExists ? .green : .red)
                                 Text("Support Folder:")
-                                TextField("Yaagl support folder path", text: $engine.supportPath)
+                                TextField("Yaagl support folder path", text: Binding(
+                                    get: { engine.supportPath },
+                                    set: {
+                                        supportPathWasEdited = true
+                                        engine.setPaths(appPath: nil, supportPath: $0)
+                                    }
+                                ))
                                     .font(.caption)
                                     .textFieldStyle(.roundedBorder)
+                                    .disabled(engine.isWorking)
                                     .onSubmit { engine.refreshStatus() }
                                     .accessibilityLabel("Yaagl support folder path")
                                 Spacer()

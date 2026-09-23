@@ -11,23 +11,70 @@ public struct InstallStatus {
 }
 
 public class InstallerEngine: ObservableObject {
-    public static let defaultAppPath = "/Applications/Yaagl ZZZ OS.app"
-    public static let defaultSupportPath = ("~/Library/Application Support/Yaagl ZZZ OS" as NSString).expandingTildeInPath
+    public enum Target: String, CaseIterable, Identifiable {
+        case stable, betaOS, betaCN
+
+        public var id: String { rawValue }
+
+        public var title: String {
+            switch self {
+            case .stable: "Yaagl ZZZ OS"
+            case .betaOS: "Yaagl ZZZ OS DX12 Beta"
+            case .betaCN: "Yaagl ZZZ DX12 Beta"
+            }
+        }
+
+        public var appPath: String { "/Applications/\(title).app" }
+        public var supportPath: String { ("~/Library/Application Support/\(title)" as NSString).expandingTildeInPath }
+    }
+
+    public static let defaultAppPath = Target.stable.appPath
+    public static let defaultSupportPath = Target.stable.supportPath
+
+    public static func availableTarget(fileExists: (String) -> Bool = FileManager.default.fileExists(atPath:)) -> Target {
+        Target.allCases.first { fileExists($0.appPath) } ?? .stable
+    }
     public static var releaseDownloadUrl: String {
         let archiveName = RuntimePackage.releaseArchiveName
         let encoded = archiveName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? archiveName
         return "https://github.com/dbc-hbin/zzz-wine-d3dmetal-dx12/releases/download/v1.1.1/\(encoded)"
     }
 
-    @Published public var appPath: String = defaultAppPath
-    @Published public var supportPath: String = defaultSupportPath
+    @Published public var appPath: String
+    @Published public var supportPath: String
     @Published public var status = InstallStatus()
     @Published public var isWorking = false
     @Published public var progress = 0.0
     @Published public var currentStep = "Ready"
     @Published public var logs: [String] = []
 
-    public init() {}
+    public init() {
+        let target = Self.availableTarget()
+        appPath = target.appPath
+        supportPath = target.supportPath
+    }
+
+    public var selectedTarget: Target? {
+        Target.allCases.first { $0.appPath == appPath && $0.supportPath == supportPath }
+    }
+
+    public func selectTarget(_ target: Target) {
+        guard !isWorking else { return }
+        appPath = target.appPath
+        supportPath = target.supportPath
+        refreshStatus()
+    }
+
+    public func setPaths(appPath: String?, supportPath: String?) {
+        guard !isWorking else { return }
+        if let appPath {
+            self.appPath = appPath
+            if supportPath == nil, let target = Target.allCases.first(where: { ($0.appPath as NSString).lastPathComponent == (appPath as NSString).lastPathComponent }) {
+                self.supportPath = target.supportPath
+            }
+        }
+        if let supportPath { self.supportPath = supportPath }
+    }
 
     public func log(_ message: String) {
         let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
@@ -336,16 +383,16 @@ public class InstallerEngine: ObservableObject {
     private func requireYaaglInstallation() throws {
         let fileManager = FileManager.default
         guard fileManager.fileExists(atPath: appPath) else {
-            throw NSError(domain: "Install", code: 10, userInfo: [NSLocalizedDescriptionKey: "Yaagl ZZZ OS.app was not found at \(appPath)."])
+            throw NSError(domain: "Install", code: 10, userInfo: [NSLocalizedDescriptionKey: "Yaagl app was not found at \(appPath)."])
         }
         guard fileManager.fileExists(atPath: supportPath) else {
-            throw NSError(domain: "Install", code: 11, userInfo: [NSLocalizedDescriptionKey: "Yaagl ZZZ OS support folder was not found at \(supportPath)."])
+            throw NSError(domain: "Install", code: 11, userInfo: [NSLocalizedDescriptionKey: "Yaagl support folder was not found at \(supportPath)."])
         }
     }
 
     private func requireNoRunningYaaglProcesses() throws {
         guard findYaaglProcesses().isEmpty else {
-            throw NSError(domain: "Install", code: 12, userInfo: [NSLocalizedDescriptionKey: "Quit Yaagl ZZZ OS and its Wine processes before changing the runtime."])
+            throw NSError(domain: "Install", code: 12, userInfo: [NSLocalizedDescriptionKey: "Quit Yaagl and its Wine processes before changing the runtime."])
         }
     }
 
